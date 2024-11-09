@@ -7,3 +7,5 @@ The requirements.txt may be out of date.
 You will probably need a lot of VRAM to get good results. I've been using nous-hermes-2-solar-10.7b.Q5_K_M.gguf, but there may be something better out there now.
 
 Please feel free to contribute and open pull requests.
+
+I won't have time to help you set this up. But if you do get it running and need help with prompt engineering or some bugs then I am very happy to help.
