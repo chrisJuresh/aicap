@@ -6,9 +6,12 @@ from llama_cpp import Llama
 import os
 import random
 import pysrt  # Library to handle SRT files
-from moviepy.editor import VideoFileClip  # For handling video and audio
+from moviepy import VideoFileClip  # For handling video and audio
 import subprocess  # For running shell commands
 from prompts import STORY, END_PROMPT_FIRST_CHUNK, END_PROMPT_OTHER_CHUNKS, REPLACEMENTS
+
+print(torch.cuda.is_available())  # Should return True if GPU is detected
+print(torch.cuda.get_device_name(0))  # Should print your GPU's name
 
 # Check if CUDA is available and set the device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,16 +48,18 @@ def replace_words(text, replacements):
     replaced_words = [replacements.get(word, word) for word in words]  # Replace words using the dictionary
     return ' '.join(replaced_words)  # Join the words back into a single string
 
-# Set up the Llama model
-model_path = "./nous-hermes-2-solar-10.7b.Q5_K_M.gguf"
-if not os.path.exists(model_path):
-    raise FileNotFoundError(f"Model path does not exist: {model_path}")
 
-llm = Llama(
-    model_path=model_path,  # Ensure the model file is downloaded
-    n_ctx=8192,  # The max sequence length to use - note that longer sequence lengths require much more resources
-    n_threads=8,  # The number of CPU threads to use, tailor to your system and the resulting performance
-    n_gpu_layers=200  # The number of layers to offload to GPU, if you have GPU acceleration available
+llm = Llama.from_pretrained(
+    repo_id="TheBloke/Nous-Hermes-2-SOLAR-10.7B-GGUF",
+    filename="nous-hermes-2-solar-10.7b.Q6_K.gguf",
+    n_ctx=8192,
+    n_gpu_layers=100,  # Force all layers to GPU
+    n_batch=512,       # Reduced batch size
+    offload_kqv=False,
+    prefer_cpu=False,
+    use_mlock=False,
+    main_gpu=0,        # Specify primary GPU
+    tensor_split=None  # Don't split across devices
 )
 
 # Directory containing videos
@@ -170,9 +175,6 @@ for video_file in video_files:
                 output_video_path
             ]
             subprocess.run(ffmpeg_command, check=True)
-
-            # Delete the original video
-            os.remove(video_path)
 
 
         except Exception as e:
