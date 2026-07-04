@@ -15,6 +15,7 @@ It uses:
 - **Folder batch mode** that processes every video in a folder without switching back and forth between the vision model and text model.
 - **Resumable checkpoints** so interrupted runs continue from cached frames, transcripts, visual captions, story-aware refined captions, or finished outputs.
 - **Story-aware refinement** so caption batches can use concise context from earlier parts of the video without overloading local model context windows.
+- **Static output browser** so batch results can be reviewed from one generated `index.html`.
 
 The implementation is split into small modules under `src/aicap`:
 
@@ -133,7 +134,7 @@ Common settings to change:
 
 ```toml
 [captioning]
-sample_every = 10.0
+sample_every = 2.0
 caption_mode = "neutral"
 frame_width = 960
 visual_temperature = 0.0
@@ -160,6 +161,8 @@ subtitle_band_height_percent = 16.0
 resume = true
 force = false
 recursive = false
+output_browser = true
+open_output_browser = false
 
 [profiles.single]
 out_dir = "output"
@@ -216,7 +219,7 @@ Easy mode:
 .\run_batch_captioner.bat "C:\Path\To\FolderOfVideos"
 ```
 
-Or drag a folder onto `run_batch_captioner.bat`. Change the batch defaults in `settings.toml`, especially under `[profiles.batch]`.
+Or drag a folder onto `run_batch_captioner.bat`. This is the best default path for quality on a 3080 Ti: it uses `settings.toml`, processes every video in efficient model stages, keeps story-aware refinement enabled, and opens the generated output browser when it finishes. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
 
 The batch runner processes videos in this order:
 
@@ -246,6 +249,14 @@ A manifest is also written here:
 ```text
 output_batch\batch_manifest.json
 ```
+
+The batch output browser is written here:
+
+```text
+output_batch\index.html
+```
+
+Open it in your browser to review all generated videos, jump through captions, search across outputs, and open the SRT/VTT/JSON files.
 
 Manual batch command using the settings file:
 
@@ -452,16 +463,18 @@ If you write literal curly braces in prompt templates, double them like this:
 
 ## 10. Speed/quality settings
 
+The default `settings.toml.example` is now quality-leaning for a 3080 Ti: `sample_every = 2.0`, story refinement on, Whisper on, deterministic temperatures, and readable burned-in captions. That is the setting used by `run_batch_captioner.bat` after you copy or install the local settings file.
+
 For faster processing:
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --sample-every 2 --no-transcribe
+.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --sample-every 5 --no-transcribe
 ```
 
 For more detailed visual coverage:
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --sample-every 0.5 --refine
+.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --sample-every 1 --refine
 ```
 
 For a quick test on the first 20 sampled frames:

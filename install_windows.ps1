@@ -59,6 +59,16 @@ if (-not (Test-Path ".\.venv")) {
   python -m venv .venv
 }
 
+if ((Test-Path ".\settings.toml.example") -and -not (Test-Path ".\settings.toml")) {
+  Write-Host "Creating local settings.toml from settings.toml.example..." -ForegroundColor Cyan
+  Copy-Item ".\settings.toml.example" ".\settings.toml"
+}
+
+if ((Test-Path ".\prompts.toml.example") -and -not (Test-Path ".\prompts.toml")) {
+  Write-Host "Creating local prompts.toml from prompts.toml.example..." -ForegroundColor Cyan
+  Copy-Item ".\prompts.toml.example" ".\prompts.toml"
+}
+
 Write-Host "Installing Python dependencies..." -ForegroundColor Cyan
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt

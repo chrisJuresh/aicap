@@ -3,6 +3,7 @@ from __future__ import annotations
 from .config import parse_args, validate_args
 from .jobs import build_jobs, parse_extensions
 from .ollama import unload_ollama_model
+from .output_browser import open_in_browser, write_output_browser
 from .pipeline import run_stage_prepare_and_transcribe, run_stage_refine, run_stage_visual_captions, write_outputs_and_burn
 from .prompts import load_prompts
 from .util import write_json
@@ -44,5 +45,11 @@ def main() -> None:
         manifest_path = out_dir / "batch_manifest.json"
         write_json(manifest_path, manifest)
         print(f"\nBatch manifest: {manifest_path}")
+
+    if args.output_browser:
+        browser_path = write_output_browser(out_dir, jobs, args, is_batch)
+        print(f"Output browser: {browser_path}")
+        if args.open_output_browser:
+            open_in_browser(browser_path)
 
     print("\nDone.")

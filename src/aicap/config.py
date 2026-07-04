@@ -54,6 +54,8 @@ ARG_FLAG_NAMES: Dict[str, Tuple[str, ...]] = {
     "subtitle_band_height_percent": ("--subtitle-band-height-percent",),
     "video_crf": ("--video-crf",),
     "video_preset": ("--video-preset",),
+    "output_browser": ("--output-browser", "--no-output-browser"),
+    "open_output_browser": ("--open-output-browser", "--no-open-output-browser"),
     "keep_temp": ("--keep-temp", "--no-keep-temp"),
     "resume": ("--resume", "--no-resume"),
     "force": ("--force", "--no-force"),
@@ -168,7 +170,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ollama-seed", type=int, default=cfg("ollama_seed", 42), help="Fixed Ollama seed for repeatable generations. Use a negative value to disable")
     p.add_argument("--vision-model", default=cfg("vision_model", DEFAULT_VISION_MODEL), help="Ollama vision model")
     p.add_argument("--text-model", default=cfg("text_model", DEFAULT_TEXT_MODEL), help="Ollama text model used when --refine is set")
-    p.add_argument("--sample-every", type=float, default=cfg("sample_every", 10.0), help="Seconds between visual samples. Default is 10.0 for story-style captions; use 1.0 or 2.0 for denser captions")
+    p.add_argument("--sample-every", type=float, default=cfg("sample_every", 2.0), help="Seconds between visual samples. Default is 2.0 for quality; use larger values for faster runs")
     p.add_argument("--frame-width", type=int, default=cfg("frame_width", 960), help="Resize extracted frames to this width. Use 0 to keep original size")
     p.add_argument("--jpeg-quality", type=int, default=cfg("jpeg_quality", 4), help="FFmpeg JPG quality, 2 is high, 31 is low")
     p.add_argument("--visual-temperature", type=float, default=cfg("visual_temperature", 0.0), help="Ollama sampling temperature for per-frame visual captions")
@@ -201,6 +203,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--subtitle-band-height-percent", type=float, default=cfg("subtitle_band_height_percent", 16.0), help="Extra black band height as a percent of the original video height when --caption-placement below is used")
     p.add_argument("--video-crf", type=int, default=cfg("video_crf", 20), help="x264 CRF for captioned MP4. Lower is higher quality/larger file")
     p.add_argument("--video-preset", default=cfg("video_preset", "medium"), help="x264 preset for captioned MP4, e.g. ultrafast, veryfast, medium, slow")
+    p.add_argument("--output-browser", action=argparse.BooleanOptionalAction, default=cfg("output_browser", True), help="Write index.html in the output folder for browsing generated videos and captions")
+    p.add_argument("--open-output-browser", action=argparse.BooleanOptionalAction, default=cfg("open_output_browser", False), help="Open the generated output browser when processing finishes")
     p.add_argument("--keep-temp", action=argparse.BooleanOptionalAction, default=cfg("keep_temp", False), help="Keep extracted frames and audio")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=cfg("resume", True), help="Resume from completed checkpoints and cached intermediate files. Enabled by default")
     p.add_argument("--force", action=argparse.BooleanOptionalAction, default=cfg("force", False), help="Ignore resume checkpoints and regenerate everything from scratch")
