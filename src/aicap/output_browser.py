@@ -72,12 +72,23 @@ def safe_json_for_script(data: Any) -> str:
     )
 
 
-def write_output_browser(out_dir: Path, jobs: List[VideoJob], args: Any, is_batch: bool) -> Path:
+def write_output_browser(
+    out_dir: Path,
+    jobs: List[VideoJob],
+    args: Any,
+    is_batch: bool,
+    total_jobs: Optional[int] = None,
+    auto_refresh: bool = False,
+) -> Path:
     out_dir = out_dir.expanduser().resolve()
+    resolved_total = total_jobs if total_jobs is not None else len(jobs)
     payload = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "is_batch": is_batch,
         "job_count": len(jobs),
+        "total_job_count": resolved_total,
+        "is_complete": len(jobs) >= resolved_total,
+        "auto_refresh": auto_refresh,
         "caption_count": sum(len(job.items or []) for job in jobs),
         "jobs": [browser_job_payload(out_dir, job, args, is_batch) for job in jobs],
     }
@@ -418,10 +429,14 @@ def render_output_browser(payload: Dict[str, Any]) -> str:
     }}
 
     function renderSummary() {{
+      const videoLabel = DATA.total_job_count === DATA.job_count
+        ? `${{DATA.job_count}} video${{DATA.job_count === 1 ? "" : "s"}}`
+        : `${{DATA.job_count}} of ${{DATA.total_job_count}} videos`;
       summary.innerHTML = `
-        <span>${{DATA.job_count}} video${{DATA.job_count === 1 ? "" : "s"}}</span>
+        <span>${{videoLabel}}</span>
         <span>${{DATA.caption_count}} captions</span>
         <span>Generated ${{escapeHtml(DATA.generated_at)}}</span>
+        ${{DATA.auto_refresh ? "<span>Refreshing while batch runs</span>" : ""}}
       `;
     }}
 
@@ -554,6 +569,9 @@ def render_output_browser(payload: Dict[str, Any]) -> str:
     }});
 
     render();
+    if (DATA.auto_refresh) {{
+      window.setTimeout(() => window.location.reload(), 30000);
+    }}
   </script>
 </body>
 </html>

@@ -128,6 +128,7 @@ Copy `settings.toml.example` to `settings.toml`, then edit that local file when 
 ```text
 run_captioner.bat        uses [profiles.single]
 run_batch_captioner.bat  uses [profiles.batch]
+run_batch_captioner_10.bat uses [profiles.batch] plus --batch-chunk-size 10
 ```
 
 Common settings to change:
@@ -163,6 +164,7 @@ force = false
 recursive = false
 output_browser = true
 open_output_browser = false
+batch_chunk_size = 0
 
 [profiles.single]
 out_dir = "output"
@@ -219,7 +221,15 @@ Easy mode:
 .\run_batch_captioner.bat "C:\Path\To\FolderOfVideos"
 ```
 
-Or drag a folder onto `run_batch_captioner.bat`. This is the best default path for quality on a 3080 Ti: it uses `settings.toml`, processes every video in efficient model stages, keeps story-aware refinement enabled, and opens the generated output browser when it finishes. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
+Or drag a folder onto `run_batch_captioner.bat`. This is the most efficient default path for a 3080 Ti: it uses `settings.toml`, processes every video in full-folder model stages, keeps story-aware refinement enabled, and opens the generated output browser when it finishes. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
+
+If you want finished outputs to appear sooner while a large folder is still running, use:
+
+```powershell
+.\run_batch_captioner_10.bat "C:\Path\To\FolderOfVideos"
+```
+
+That processes the folder in groups of 10 videos. After each group, it writes the MP4/SRT/VTT/JSON files, updates `output_batch\batch_manifest.json`, and refreshes `output_batch\index.html`. If the page is open while the run is still going, it reloads itself every 30 seconds. The captions use the same quality settings as the normal batch runner; the tradeoff is a little extra model load/unload overhead between groups.
 
 The batch runner processes videos in this order:
 
@@ -257,6 +267,8 @@ output_batch\index.html
 ```
 
 Open it in your browser to review all generated videos, jump through captions, search across outputs, and open the SRT/VTT/JSON files.
+
+Set `batch_chunk_size = 10` in `settings.toml`, or pass `--batch-chunk-size 10`, if you want chunked output from a manual command. Use `0` to process the entire folder as one efficient batch.
 
 Manual batch command using the settings file:
 

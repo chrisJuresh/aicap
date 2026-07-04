@@ -42,11 +42,13 @@ class OutputBrowserTests(unittest.TestCase):
             )
             args = SimpleNamespace(burn_in=True, burn_output=None)
 
-            path = write_output_browser(out_dir, [job], args, is_batch=True)
+            path = write_output_browser(out_dir, [job], args, is_batch=True, total_jobs=3, auto_refresh=True)
             html = path.read_text(encoding="utf-8")
 
             self.assertTrue(path.exists())
             self.assertIn("AICap Outputs", html)
+            self.assertIn('"total_job_count": 3', html)
+            self.assertIn('"auto_refresh": true', html)
             self.assertIn("final caption", html)
             self.assertIn("A%20Video/captioned_video.mp4", html)
 

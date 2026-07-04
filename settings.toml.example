@@ -59,3 +59,4 @@ force = false
 keep_temp = false
 output_browser = true
 open_output_browser = false
+batch_chunk_size = 0
