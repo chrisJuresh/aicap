@@ -13,7 +13,6 @@ if "%~1"=="" (
 
 "%SCRIPT_DIR%.venv\Scripts\python.exe" "%SCRIPT_DIR%src\video_captioner.py" "%~1" ^
   --settings-file "%SCRIPT_DIR%settings.toml" ^
-  --settings-profile batch ^
-  --open-output-browser
+  --settings-profile batch
 
 pause

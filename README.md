@@ -129,6 +129,7 @@ Copy `settings.toml.example` to `settings.toml`, then edit that local file when 
 run_captioner.bat        uses [profiles.single]
 run_batch_captioner.bat  uses [profiles.batch]
 run_batch_captioner_10.bat uses [profiles.batch] plus --batch-chunk-size 10
+open_output_browser.bat  opens the latest generated output browser
 ```
 
 Common settings to change:
@@ -221,7 +222,7 @@ Easy mode:
 .\run_batch_captioner.bat "C:\Path\To\FolderOfVideos"
 ```
 
-Or drag a folder onto `run_batch_captioner.bat`. This is the most efficient default path for a 3080 Ti: it uses `settings.toml`, processes every video in full-folder model stages, keeps story-aware refinement enabled, and opens the generated output browser when it finishes. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
+Or drag a folder onto `run_batch_captioner.bat`. This is the most efficient default path for a 3080 Ti: it uses `settings.toml`, processes every video in full-folder model stages, and keeps story-aware refinement enabled. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
 
 If you want finished outputs to appear sooner while a large folder is still running, use:
 
@@ -267,6 +268,18 @@ output_batch\index.html
 ```
 
 Open it in your browser to review all generated videos, jump through captions, search across outputs, and open the SRT/VTT/JSON files.
+
+To open the latest generated browser page later, run:
+
+```bat
+open_output_browser.bat
+```
+
+It opens `output_batch\index.html` when it exists, otherwise `output\index.html`. You can also pass a specific output folder:
+
+```bat
+open_output_browser.bat "C:\Path\To\output_batch"
+```
 
 Set `batch_chunk_size = 10` in `settings.toml`, or pass `--batch-chunk-size 10`, if you want chunked output from a manual command. Use `0` to process the entire folder as one efficient batch.
 

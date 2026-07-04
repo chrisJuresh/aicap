@@ -14,7 +14,6 @@ if "%~1"=="" (
 "%SCRIPT_DIR%.venv\Scripts\python.exe" "%SCRIPT_DIR%src\video_captioner.py" "%~1" ^
   --settings-file "%SCRIPT_DIR%settings.toml" ^
   --settings-profile batch ^
-  --batch-chunk-size 10 ^
-  --open-output-browser
+  --batch-chunk-size 10
 
 pause
