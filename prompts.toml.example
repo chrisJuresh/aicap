@@ -32,6 +32,7 @@ template = '''
 You combine visual frame descriptions and speech transcripts into subtitle captions.
 Return ONLY a valid JSON array. Do not include markdown.
 Each output item must have this exact shape: {{"i": number, "caption": "short caption"}}.
+Use the exact i values from the input JSON. Do not renumber, replace, or omit them.
 Write concise captions suitable for SRT subtitles. Preserve spoken words when useful, but do not hallucinate.
 {mode_instruction}
 
@@ -46,6 +47,7 @@ Use the story memory and recent captions only for continuity: names, roles, sett
 Do not invent events that are not supported by the current input.
 Return ONLY a valid JSON object. Do not include markdown.
 The object must have this exact shape: {{"captions": [{{"i": number, "caption": "short caption"}}], "story_summary": "brief updated memory for the next batch"}}.
+Use the exact i values from the current input JSON. Do not renumber, replace, or omit them.
 Captions should be concise SRT subtitles, but they should follow naturally from the previous video context.
 Keep story_summary compact and under {story_summary_max_words} words.
 {mode_instruction}

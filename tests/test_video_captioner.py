@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from aicap import refine as refine_module  # noqa: E402
 from aicap.cache import load_visual_cache  # noqa: E402
+from aicap.captions import captions_by_chunk_from_rows  # noqa: E402
 from aicap.constants import DEFAULT_PROMPTS  # noqa: E402
 from aicap.models import CaptionItem  # noqa: E402
 
@@ -99,6 +100,48 @@ class PipelineReliabilityTests(unittest.TestCase):
         finally:
             refine_module.check_ollama = old_check_ollama
             refine_module.ollama_generate = old_generate
+
+    def test_story_refine_accepts_ordered_captions_when_model_renumbers_ids(self) -> None:
+        items = [make_item(9), make_item(10)]
+        old_check_ollama = refine_module.check_ollama
+        old_generate = refine_module.ollama_generate
+        try:
+            refine_module.check_ollama = lambda host: None
+            refine_module.ollama_generate = (
+                lambda *args, **kwargs: '{"captions":[{"i":1,"caption":"caption nine"},{"i":2,"caption":"caption ten"}],"story_summary":"two captions"}'
+            )
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                refined = refine_module.refine_with_llm(
+                    items,
+                    host="http://example.invalid",
+                    text_model="dummy",
+                    caption_mode="neutral",
+                    batch_size=2,
+                    prompts=DEFAULT_PROMPTS,
+                    keep_alive="0",
+                    temperature=0.0,
+                    seed=42,
+                    num_ctx=8192,
+                    llm_retries=0,
+                    strict_refine=True,
+                    cache_path=None,
+                    story_context=True,
+                )
+        finally:
+            refine_module.check_ollama = old_check_ollama
+            refine_module.ollama_generate = old_generate
+
+        self.assertEqual([item.final_caption for item in refined], ["caption nine", "caption ten"])
+
+    def test_caption_rows_fall_back_to_chunk_order(self) -> None:
+        chunk = [make_item(9), make_item(10)]
+
+        by_index = captions_by_chunk_from_rows(
+            [{"i": 1, "caption": "caption nine"}, {"i": 2, "caption": "caption ten"}],
+            chunk,
+        )
+
+        self.assertEqual(by_index, {9: "caption nine", 10: "caption ten"})
 
     def test_visual_cache_skips_bad_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

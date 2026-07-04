@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from tqdm import tqdm
 
 from .captions import (
-    captions_by_index_from_rows,
+    caption_rows_from_payload,
+    captions_by_chunk_from_rows,
     clamp_words,
     extract_json_array,
     extract_json_object,
@@ -188,12 +189,15 @@ def _refine_independent_batches(
                 num_ctx=num_ctx,
                 response_format="json",
             )
-            parsed = extract_json_array(raw)
-            if parsed is None:
+            parsed_obj = extract_json_object(raw)
+            parsed_rows = caption_rows_from_payload(parsed_obj) if parsed_obj is not None else None
+            if parsed_rows is None:
+                parsed_rows = caption_rows_from_payload(extract_json_array(raw))
+            if parsed_rows is None:
                 if attempt < llm_retries:
                     print("Could not parse LLM JSON for one batch; retrying.", file=sys.stderr)
                 continue
-            by_index = captions_by_index_from_rows(parsed)
+            by_index = captions_by_chunk_from_rows(parsed_rows, chunk)
             missing_indices = missing_caption_indices(chunk, by_index)
             if not missing_indices:
                 break
@@ -304,18 +308,16 @@ def _refine_story_batches(
             parsed_captions: Optional[List[Any]] = None
             new_summary = ""
             if parsed_obj is not None:
-                maybe_captions = parsed_obj.get("captions")
-                if isinstance(maybe_captions, list):
-                    parsed_captions = maybe_captions
+                parsed_captions = caption_rows_from_payload(parsed_obj)
                 new_summary = clamp_words(str(parsed_obj.get("story_summary", "")), story_summary_max_words)
             else:
-                parsed_captions = extract_json_array(raw)
+                parsed_captions = caption_rows_from_payload(extract_json_array(raw))
 
             if parsed_captions is None:
                 if attempt < llm_retries:
                     print("Could not parse story-aware LLM JSON for one batch; retrying.", file=sys.stderr)
                 continue
-            by_index = captions_by_index_from_rows(parsed_captions)
+            by_index = captions_by_chunk_from_rows(parsed_captions, chunk)
             missing_indices = missing_caption_indices(chunk, by_index)
             if not missing_indices:
                 break

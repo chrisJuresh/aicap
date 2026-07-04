@@ -146,16 +146,90 @@ def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+CAPTION_KEYS = ("caption", "text", "final_caption", "subtitle", "line")
+INDEX_KEYS = ("i", "index", "id", "caption_index")
+
+
+def caption_rows_from_payload(payload: Any) -> Optional[List[Any]]:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return None
+
+    nested = payload.get("captions")
+    if nested is not None:
+        return caption_rows_from_payload(nested)
+
+    if any(str(key).isdigit() for key in payload.keys()):
+        return [{"i": key, "caption": value} for key, value in payload.items()]
+
+    if any(key in payload for key in CAPTION_KEYS):
+        return [payload]
+
+    return None
+
+
+def caption_text_from_row(row: Any) -> str:
+    if isinstance(row, str):
+        return clean_text(row)
+    if not isinstance(row, dict):
+        return ""
+    for key in CAPTION_KEYS:
+        if key in row:
+            return clean_text(str(row[key]))
+    return ""
+
+
+def caption_index_from_row(row: Any) -> Optional[int]:
+    if not isinstance(row, dict):
+        return None
+    for key in INDEX_KEYS:
+        if key not in row:
+            continue
+        try:
+            return int(row[key])
+        except Exception:
+            return None
+    return None
+
+
 def captions_by_index_from_rows(rows: Iterable[Any]) -> Dict[int, str]:
     by_index: Dict[int, str] = {}
     for row in rows:
-        if isinstance(row, dict) and "i" in row and "caption" in row:
-            try:
-                caption = clean_text(str(row["caption"]))
-                if caption:
-                    by_index[int(row["i"])] = caption
-            except Exception:
-                continue
+        caption = caption_text_from_row(row)
+        index = caption_index_from_row(row)
+        if caption and index is not None:
+            by_index[index] = caption
+    return by_index
+
+
+def captions_by_chunk_from_rows(rows: Iterable[Any], chunk: List[CaptionItem]) -> Dict[int, str]:
+    requested = [item.index for item in chunk]
+    requested_set = set(requested)
+    by_index: Dict[int, str] = {}
+    ordered_fallbacks: List[str] = []
+
+    for row in rows:
+        caption = caption_text_from_row(row)
+        if not caption:
+            continue
+        index = caption_index_from_row(row)
+        if index in requested_set and index not in by_index:
+            by_index[index] = caption
+        else:
+            ordered_fallbacks.append(caption)
+
+    if not by_index and len(ordered_fallbacks) >= len(chunk):
+        return {item.index: ordered_fallbacks[position] for position, item in enumerate(chunk)}
+
+    fallback_iter = iter(ordered_fallbacks)
+    for item in chunk:
+        if item.index in by_index:
+            continue
+        fallback_caption = next(fallback_iter, "")
+        if fallback_caption:
+            by_index[item.index] = fallback_caption
+
     return by_index
 
 
