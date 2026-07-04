@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local/private runtime config. Commit the matching *.example files instead.
+settings.toml
+prompts.toml
+*.local.toml
+
+input/
+output/
+output_batch/
+
+*.tmp
+*.log

@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict
+
+
+DEFAULT_VISION_MODEL = "huihui_ai/qwen2.5-vl-abliterated:latest"
+DEFAULT_TEXT_MODEL = "richardyoung/qwen3-14b-abliterated:Q4_K_M"
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+DEFAULT_PROMPTS_PATH = Path(__file__).resolve().parents[2] / "prompts.toml"
+DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parents[2] / "settings.toml"
+DEFAULT_VIDEO_EXTENSIONS = ".mp4,.mkv,.mov,.avi,.webm,.m4v,.wmv,.mpg,.mpeg"
+
+DEFAULT_PROMPTS: Dict[str, Dict[str, str]] = {
+    "visual": {
+        "base": (
+            "You create timestamped accessibility captions for a local video. "
+            "Describe only what is visible in this single frame. "
+            "Return one concise factual sentence, 8 to 25 words. "
+            "Do not mention that this is a frame or image."
+        ),
+        "explicit": (
+            "Use direct, concrete wording for visible actions. "
+            "Stay factual, do not embellish, and do not invent details."
+        ),
+        "neutral": (
+            "Keep the caption neutral and factual. "
+            "If sensitive content is visible, describe it only at a high level."
+        ),
+    },
+    "refine": {
+        "explicit_mode_instruction": (
+            "Use direct, concrete wording while staying factual. Do not invent details."
+        ),
+        "neutral_mode_instruction": "Keep captions neutral and factual.",
+        "template": (
+            "You combine visual frame descriptions and speech transcripts into subtitle captions.\n"
+            "Return ONLY a valid JSON array. Do not include markdown.\n"
+            "Each output item must have this exact shape: {{\"i\": number, \"caption\": \"short caption\"}}.\n"
+            "Write concise captions suitable for SRT subtitles. Preserve spoken words when useful, but do not hallucinate.\n"
+            "{mode_instruction}\n\n"
+            "Input JSON:\n"
+            "{input_json}"
+        ),
+    },
+    "story": {
+        "template": (
+            "You combine visual frame descriptions and speech transcripts into subtitle captions that read like a coherent story.\n"
+            "Use the story memory and recent captions only for continuity: names, roles, setting, actions already established, and pronoun clarity.\n"
+            "Do not invent events that are not supported by the current input.\n"
+            "Return ONLY a valid JSON object. Do not include markdown.\n"
+            "The object must have this exact shape: {{\"captions\": [{{\"i\": number, \"caption\": \"short caption\"}}], \"story_summary\": \"brief updated memory for the next batch\"}}.\n"
+            "Captions should be concise SRT subtitles, but they should follow naturally from the previous video context.\n"
+            "Keep story_summary factual, compact, and under {story_summary_max_words} words.\n"
+            "{mode_instruction}\n\n"
+            "Story memory so far:\n{story_summary}\n\n"
+            "Recent captions:\n{previous_captions}\n\n"
+            "Current input JSON:\n{input_json}"
+        ),
+        "empty_story_summary": "No previous context yet.",
+        "empty_previous_captions": "No previous captions yet.",
+    },
+}

@@ -1,0 +1,59 @@
+# Public-safe example settings.
+# Copy this file to settings.toml for local use.
+
+[paths]
+prompts_file = "prompts.toml"
+
+[profiles.single]
+out_dir = "output"
+
+[profiles.batch]
+out_dir = "output_batch"
+
+[models]
+ollama_host = "http://localhost:11434"
+ollama_keep_alive = "30m"
+ollama_num_ctx = 8192
+ollama_seed = 42
+vision_model = "huihui_ai/qwen2.5-vl-abliterated:latest"
+text_model = "richardyoung/qwen3-14b-abliterated:Q4_K_M"
+
+[captioning]
+caption_mode = "neutral"
+sample_every = 10.0
+frame_width = 960
+jpeg_quality = 4
+visual_temperature = 0.0
+video_extensions = ".mp4,.mkv,.mov,.avi,.webm,.m4v,.wmv,.mpg,.mpeg"
+
+[refinement]
+refine = true
+refine_batch_size = 8
+refine_temperature = 0.0
+llm_retries = 2
+strict_refine = true
+story_context = true
+story_previous_captions = 18
+story_context_max_chars = 4000
+story_summary_max_words = 140
+
+[speech]
+no_transcribe = false
+whisper_model = "large-v3-turbo"
+whisper_device = "auto"
+
+[burn_in]
+burn_in = true
+caption_placement = "below"
+subtitle_font = "Arial"
+subtitle_font_size_percent = 1
+subtitle_margin_v_percent = 1.8
+subtitle_band_height_percent = 6.0
+video_crf = 20
+video_preset = "medium"
+
+[runtime]
+recursive = false
+resume = true
+force = false
+keep_temp = false

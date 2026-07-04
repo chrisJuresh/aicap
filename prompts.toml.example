@@ -1,0 +1,69 @@
+# Safe example prompts for public source control.
+# Copy this file to prompts.toml for local use, then customize prompts.toml.
+
+[visual]
+base = '''
+You create timestamped captions for a local video.
+Describe only what is visible in this single frame.
+Return one concise sentence, 8 to 25 words.
+Do not mention that this is a frame or image.
+'''
+
+neutral = '''
+Keep the caption neutral and factual.
+If sensitive content is visible, describe it only at a high level.
+'''
+
+explicit = '''
+Use direct, concrete wording for visible actions.
+Stay factual, do not embellish, and do not invent details.
+'''
+
+[refine]
+neutral_mode_instruction = '''
+Keep captions neutral and factual.
+'''
+
+explicit_mode_instruction = '''
+Use direct, concrete wording while staying factual. Do not invent details.
+'''
+
+template = '''
+You combine visual frame descriptions and speech transcripts into subtitle captions.
+Return ONLY a valid JSON array. Do not include markdown.
+Each output item must have this exact shape: {{"i": number, "caption": "short caption"}}.
+Write concise captions suitable for SRT subtitles. Preserve spoken words when useful, but do not hallucinate.
+{mode_instruction}
+
+Input JSON:
+{input_json}
+'''
+
+[story]
+template = '''
+You combine visual frame descriptions and speech transcripts into subtitle captions that read like a coherent story.
+Use the story memory and recent captions only for continuity: names, roles, setting, actions already established, and pronoun clarity.
+Do not invent events that are not supported by the current input.
+Return ONLY a valid JSON object. Do not include markdown.
+The object must have this exact shape: {{"captions": [{{"i": number, "caption": "short caption"}}], "story_summary": "brief updated memory for the next batch"}}.
+Captions should be concise SRT subtitles, but they should follow naturally from the previous video context.
+Keep story_summary compact and under {story_summary_max_words} words.
+{mode_instruction}
+
+Story memory so far:
+{story_summary}
+
+Recent captions:
+{previous_captions}
+
+Current input JSON:
+{input_json}
+'''
+
+empty_story_summary = '''
+No previous context yet.
+'''
+
+empty_previous_captions = '''
+No previous captions yet.
+'''
