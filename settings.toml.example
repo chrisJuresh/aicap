@@ -21,6 +21,7 @@ text_model = "richardyoung/qwen3-14b-abliterated:Q4_K_M"
 [captioning]
 caption_mode = "neutral"
 sample_every = 2.0
+caption_window_seconds = 6.0
 frame_width = 960
 jpeg_quality = 4
 visual_temperature = 0.0
@@ -46,9 +47,9 @@ whisper_device = "auto"
 burn_in = true
 caption_placement = "below"
 subtitle_font = "Arial"
-subtitle_font_size_percent = 3.2
-subtitle_margin_v_percent = 1.8
-subtitle_band_height_percent = 16.0
+subtitle_font_size_percent = 2.4
+subtitle_margin_v_percent = 1.0
+subtitle_band_height_percent = 8.0
 video_crf = 20
 video_preset = "medium"
 

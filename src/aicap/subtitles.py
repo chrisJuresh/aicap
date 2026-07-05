@@ -9,6 +9,9 @@ from .models import CaptionItem
 from .util import atomic_write_text, clean_text, require_exe, run_cmd, seconds_to_srt_time, seconds_to_vtt_time
 
 
+SUBTITLE_LAYOUT_VERSION = 2
+
+
 def write_srt(path: Path, items: List[CaptionItem]) -> None:
     blocks: List[str] = []
     for n, item in enumerate(items, start=1):
@@ -62,6 +65,12 @@ def percent_of_height(height: int, percent: float, minimum: int) -> int:
     return max(minimum, int(round(height * (percent / 100.0))))
 
 
+def clamp_int(value: int, minimum: int, maximum: int) -> int:
+    if maximum < minimum:
+        maximum = minimum
+    return max(minimum, min(maximum, int(round(value))))
+
+
 def resolve_subtitle_layout(
     video_path: Path,
     placement: str,
@@ -73,20 +82,42 @@ def resolve_subtitle_layout(
     band_height_percent: float,
 ) -> Tuple[int, int, int, int]:
     size = ffprobe_video_size(video_path)
+    input_width = 1920 if size is None else size[0]
     input_height = 1080 if size is None else size[1]
+    readable_dimension = max(360, min(input_width, input_height))
 
     if placement == "below":
-        band_height = even_int(
-            fixed_band_height if fixed_band_height is not None else percent_of_height(input_height, band_height_percent, 48),
-            minimum=24,
-        )
+        requested_band_height = fixed_band_height if fixed_band_height is not None else percent_of_height(input_height, band_height_percent, 48)
+    else:
+        requested_band_height = 0
+
+    font_reference_height = input_height + (requested_band_height if placement == "below" else 0)
+    if fixed_font_size is not None:
+        font_size = max(8, int(fixed_font_size))
+    else:
+        requested_font_size = percent_of_height(font_reference_height, font_size_percent, 18)
+        adaptive_font_size = clamp_int(round(readable_dimension * 0.028), 16, 34)
+        font_size = clamp_int(min(requested_font_size, adaptive_font_size), 14, 40)
+
+    if fixed_margin_v is not None:
+        margin_v = max(0, int(fixed_margin_v))
+    else:
+        requested_margin = percent_of_height(font_reference_height, margin_v_percent, 8)
+        adaptive_margin = clamp_int(round(font_size * 0.45), 6, max(8, font_size))
+        margin_v = clamp_int(min(requested_margin, adaptive_margin), 4, max(8, font_size))
+
+    if placement == "below":
+        if fixed_band_height is not None:
+            band_height = even_int(fixed_band_height, minimum=24)
+        else:
+            natural_band = even_int(round(font_size * 2.8 + margin_v * 2), minimum=48)
+            max_band = even_int(clamp_int(round(input_height * 0.10), 56, 132), minimum=24)
+            min_band = even_int(round(font_size * 1.8 + margin_v * 2), minimum=48)
+            band_height = even_int(clamp_int(min(requested_band_height, natural_band), min_band, max_band), minimum=24)
         reference_height = input_height + band_height
     else:
         band_height = 0
         reference_height = input_height
-
-    font_size = max(8, int(fixed_font_size)) if fixed_font_size is not None else percent_of_height(reference_height, font_size_percent, 18)
-    margin_v = max(0, int(fixed_margin_v)) if fixed_margin_v is not None else percent_of_height(reference_height, margin_v_percent, 8)
 
     return font_size, margin_v, band_height, reference_height
 

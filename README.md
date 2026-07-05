@@ -11,7 +11,7 @@ It uses:
 - **Editable local prompts in `prompts.toml`** so you can change caption behavior without editing Python.
 - **Editable local runtime defaults in `settings.toml`** so you do not need long command lines.
 - **FFmpeg subtitle burn-in** to automatically create a captioned MP4.
-- **Proportional burned-in caption sizing** so font size and caption band scale with each video height.
+- **Adaptive burned-in caption sizing** so font size and caption band stay readable on landscape and vertical videos.
 - **Folder batch mode** that processes every video in a folder without switching back and forth between the vision model and text model.
 - **Resumable checkpoints** so interrupted runs continue from cached frames, transcripts, visual captions, story-aware refined captions, or finished outputs.
 - **Story-aware refinement** so caption batches can use concise context from earlier parts of the video without overloading local model context windows.
@@ -137,6 +137,7 @@ Common settings to change:
 ```toml
 [captioning]
 sample_every = 2.0
+caption_window_seconds = 6.0
 caption_mode = "neutral"
 frame_width = 960
 visual_temperature = 0.0
@@ -156,8 +157,8 @@ ollama_seed = 42
 [burn_in]
 burn_in = true
 caption_placement = "below"
-subtitle_font_size_percent = 3.2
-subtitle_band_height_percent = 16.0
+subtitle_font_size_percent = 2.4
+subtitle_band_height_percent = 8.0
 
 [runtime]
 resume = true
@@ -222,7 +223,7 @@ Easy mode:
 .\run_batch_captioner.bat "C:\Path\To\FolderOfVideos"
 ```
 
-Or drag a folder onto `run_batch_captioner.bat`. This is the most efficient default path for a 3080 Ti: it uses `settings.toml`, processes every video in full-folder model stages, and keeps story-aware refinement enabled. For even denser visual coverage, lower `sample_every`; for faster runs, raise it.
+Or drag a folder onto `run_batch_captioner.bat`. This is the most efficient default path for a 3080 Ti: it uses `settings.toml`, processes every video in full-folder model stages, and keeps story-aware refinement enabled. By default it samples visual evidence every 2 seconds, then merges those samples into 6-second caption beats so subtitles have time to be read. For denser visual evidence, lower `sample_every`; for slower/fewer final captions, raise `caption_window_seconds`; for faster runs, raise `sample_every`.
 
 If you want finished outputs to appear sooner while a large folder is still running, use:
 
@@ -377,6 +378,7 @@ Useful options:
 - `--story-previous-captions 18` - how many recent final captions are passed into the next batch.
 - `--story-context-max-chars 4000` - approximate character budget for story memory + recent captions.
 - `--story-summary-max-words 140` - maximum length of the rolling story summary.
+- `--caption-window-seconds 6` - how many seconds each final caption covers. The default keeps captions readable and reduces repetitive one-frame subtitles.
 
 - `--refine-temperature 0.0` - keep text refinement deterministic.
 - `--llm-retries 2` - retry malformed or partial JSON before keeping fallback captions.
@@ -412,22 +414,22 @@ Customize the burned-in captions proportionally:
 
 ```powershell
 .\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" `
-  --subtitle-font-size-percent 3.8 `
-  --subtitle-band-height-percent 18 `
-  --subtitle-margin-v-percent 2 `
+  --subtitle-font-size-percent 2.4 `
+  --subtitle-band-height-percent 8 `
+  --subtitle-margin-v-percent 1 `
   --video-crf 18
 ```
 
-The default font size is now calculated as a percentage of the final video height, so captions stay proportional on 480p, 720p, 1080p, and vertical videos. In `below` mode, the black caption band is calculated as a percentage of the original video height, then the font and margin are calculated from the final padded height.
+The default font size uses your percentage setting but is capped by the video's readable dimension, so vertical videos no longer get oversized captions just because they are tall. In `below` mode, the black caption band is also capped to a compact readable height.
 
 Useful options:
 
 - `--caption-placement below` - add a black caption band below the picture. This is the default.
 - `--caption-placement bottom` - overlay captions at the bottom inside the picture.
 - `--burn-output "C:\Path\To\captioned.mp4"` - choose the MP4 output path.
-- `--subtitle-font-size-percent 3.2` - default proportional subtitle size. Increase for larger captions, decrease for smaller captions.
-- `--subtitle-band-height-percent 16` - default black band height in `below` mode.
-- `--subtitle-margin-v-percent 1.8` - default bottom margin for the burned-in subtitles.
+- `--subtitle-font-size-percent 2.4` - default proportional subtitle size. Increase for larger captions, decrease for smaller captions.
+- `--subtitle-band-height-percent 8` - default black band height in `below` mode.
+- `--subtitle-margin-v-percent 1` - default bottom margin for the burned-in subtitles.
 - `--subtitle-font-size 36` - fixed pixel font size override. Use this only when you do not want proportional sizing.
 - `--subtitle-band-height 200` - fixed pixel black band height override.
 - `--subtitle-margin-v 30` - fixed pixel bottom margin override.
@@ -451,6 +453,7 @@ Copy it to ignored `prompts.toml`, then edit the local file in Notepad, VS Code,
 - `[refine].template` - the prompt used by the text LLM when `--refine` is enabled.
 - `[refine].explicit_mode_instruction` - inserted into the refine template in explicit mode.
 - `[refine].neutral_mode_instruction` - inserted into the refine/story template in neutral mode.
+- `[story].global_context` - optional persistent names, roles, or audience direction that should apply to every story batch.
 - `[story].template` - the story-aware refinement prompt used by default when `--refine` is enabled.
 - `[story].empty_story_summary` and `[story].empty_previous_captions` - fallback text for the first batch.
 
@@ -472,6 +475,7 @@ In `[story].template`, keep these placeholders unless you know what you are chan
 
 ```text
 {mode_instruction}
+{global_context}
 {story_summary}
 {previous_captions}
 {input_json}
@@ -488,7 +492,7 @@ If you write literal curly braces in prompt templates, double them like this:
 
 ## 10. Speed/quality settings
 
-The default `settings.toml.example` is now quality-leaning for a 3080 Ti: `sample_every = 2.0`, story refinement on, Whisper on, deterministic temperatures, and readable burned-in captions. That is the setting used by `run_batch_captioner.bat` after you copy or install the local settings file.
+The default `settings.toml.example` is now quality-leaning for a 3080 Ti: `sample_every = 2.0`, `caption_window_seconds = 6.0`, story refinement on, Whisper on, deterministic temperatures, and readable burned-in captions. That is the setting used by `run_batch_captioner.bat` after you copy or install the local settings file.
 
 For faster processing:
 

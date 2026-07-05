@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from aicap import refine as refine_module  # noqa: E402
 from aicap.cache import load_visual_cache  # noqa: E402
-from aicap.captions import caption_rows_from_text, captions_by_chunk_from_rows  # noqa: E402
+from aicap import subtitles as subtitles_module  # noqa: E402
+from aicap.captions import build_items, caption_rows_from_text, captions_by_chunk_from_rows  # noqa: E402
 from aicap.constants import DEFAULT_PROMPTS  # noqa: E402
 from aicap.models import CaptionItem  # noqa: E402
 
@@ -200,6 +201,57 @@ class PipelineReliabilityTests(unittest.TestCase):
                     load_visual_cache(cache_path),
                     {"frame_000001.jpg": "first", "frame_000002.jpg": "second"},
                 )
+
+    def test_build_items_groups_frames_into_readable_caption_windows(self) -> None:
+        frames = [Path(f"frame_{index:06d}.jpg") for index in range(1, 7)]
+        visual = [
+            "A person enters the room.",
+            "A person enters the room.",
+            "The person turns toward the table.",
+            "Another person raises a hand.",
+            "Another person raises a hand.",
+            "The first person answers.",
+        ]
+
+        items = build_items(frames, visual, [], sample_every=2.0, duration=12.0, max_frames=None, caption_window_seconds=6.0)
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual((items[0].start, items[0].end), (0.0, 6.0))
+        self.assertEqual((items[1].start, items[1].end), (6.0, 12.0))
+        self.assertIn("+0s: A person enters the room.", items[0].visual_caption)
+        self.assertEqual(items[0].visual_caption.count("A person enters the room."), 1)
+
+    def test_build_items_merges_short_final_caption_sliver(self) -> None:
+        frames = [Path(f"frame_{index:06d}.jpg") for index in range(1, 8)]
+        visual = [f"visual {index}" for index in range(1, 8)]
+
+        items = build_items(frames, visual, [], sample_every=2.0, duration=13.0, max_frames=None, caption_window_seconds=6.0)
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual((items[-1].start, items[-1].end), (6.0, 13.0))
+        self.assertIn("visual 7", items[-1].visual_caption)
+
+    def test_adaptive_subtitle_layout_clamps_vertical_video_size(self) -> None:
+        old_probe = subtitles_module.ffprobe_video_size
+        try:
+            subtitles_module.ffprobe_video_size = lambda _path: (1080, 1920)
+            font_size, margin_v, band_height, reference_height = subtitles_module.resolve_subtitle_layout(
+                Path("vertical.mp4"),
+                placement="below",
+                fixed_font_size=None,
+                font_size_percent=3.2,
+                fixed_margin_v=None,
+                margin_v_percent=1.8,
+                fixed_band_height=None,
+                band_height_percent=16.0,
+            )
+        finally:
+            subtitles_module.ffprobe_video_size = old_probe
+
+        self.assertLessEqual(font_size, 34)
+        self.assertLessEqual(margin_v, font_size)
+        self.assertLessEqual(band_height, 132)
+        self.assertEqual(reference_height, 1920 + band_height)
 
 
 if __name__ == "__main__":

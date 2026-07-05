@@ -45,9 +45,13 @@ DEFAULT_PROMPTS: Dict[str, Dict[str, str]] = {
         ),
     },
     "story": {
+        "global_context": "",
         "template": (
             "You combine visual frame descriptions and speech transcripts into subtitle captions that read like a coherent story.\n"
             "Use the story memory and recent captions only for continuity: names, roles, setting, actions already established, and pronoun clarity.\n"
+            "Treat global names, roles, relationships, and audience directions as persistent facts for the whole video.\n"
+            "Each input row is a multi-second story beat; write one readable caption for that whole beat.\n"
+            "Make each caption advance from the previous caption instead of restating the same idea.\n"
             "Do not invent events that are not supported by the current input.\n"
             "Return ONLY a valid JSON object. Do not include markdown.\n"
             "The object must have this exact shape: {{\"captions\": [{{\"i\": number, \"caption\": \"short caption\"}}], \"story_summary\": \"brief updated memory for the next batch\"}}.\n"
@@ -55,6 +59,7 @@ DEFAULT_PROMPTS: Dict[str, Dict[str, str]] = {
             "Captions should be concise SRT subtitles, but they should follow naturally from the previous video context.\n"
             "Keep story_summary factual, compact, and under {story_summary_max_words} words.\n"
             "{mode_instruction}\n\n"
+            "Global story direction:\n{global_context}\n\n"
             "Story memory so far:\n{story_summary}\n\n"
             "Recent captions:\n{previous_captions}\n\n"
             "Current input JSON:\n{input_json}"

@@ -23,6 +23,7 @@ ARG_FLAG_NAMES: Dict[str, Tuple[str, ...]] = {
     "vision_model": ("--vision-model",),
     "text_model": ("--text-model",),
     "sample_every": ("--sample-every",),
+    "caption_window_seconds": ("--caption-window-seconds",),
     "frame_width": ("--frame-width",),
     "jpeg_quality": ("--jpeg-quality",),
     "visual_temperature": ("--visual-temperature",),
@@ -172,6 +173,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vision-model", default=cfg("vision_model", DEFAULT_VISION_MODEL), help="Ollama vision model")
     p.add_argument("--text-model", default=cfg("text_model", DEFAULT_TEXT_MODEL), help="Ollama text model used when --refine is set")
     p.add_argument("--sample-every", type=float, default=cfg("sample_every", 2.0), help="Seconds between visual samples. Default is 2.0 for quality; use larger values for faster runs")
+    p.add_argument("--caption-window-seconds", type=float, default=cfg("caption_window_seconds", 6.0), help="Seconds covered by each final caption. Frames sampled inside this window are merged before refinement")
     p.add_argument("--frame-width", type=int, default=cfg("frame_width", 960), help="Resize extracted frames to this width. Use 0 to keep original size")
     p.add_argument("--jpeg-quality", type=int, default=cfg("jpeg_quality", 4), help="FFmpeg JPG quality, 2 is high, 31 is low")
     p.add_argument("--visual-temperature", type=float, default=cfg("visual_temperature", 0.0), help="Ollama sampling temperature for per-frame visual captions")
@@ -232,6 +234,8 @@ def parse_args() -> argparse.Namespace:
 def validate_args(args: argparse.Namespace) -> None:
     if args.sample_every <= 0:
         die("--sample-every must be greater than 0")
+    if args.caption_window_seconds <= 0:
+        die("--caption-window-seconds must be greater than 0")
     if args.subtitle_font_size_percent <= 0:
         die("--subtitle-font-size-percent must be greater than 0")
     if args.subtitle_margin_v_percent < 0:

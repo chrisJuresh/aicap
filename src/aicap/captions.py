@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import CaptionItem, TranscriptSegment
 from .util import clean_text, read_json, seconds_to_srt_time, write_json
@@ -73,6 +74,35 @@ def fallback_caption(visual: str, speech: str) -> str:
     return visual or speech or "[No caption generated]"
 
 
+def normalized_caption_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", clean_text(text).lower()).strip()
+
+
+def unique_visual_captions(captions: Sequence[Tuple[float, str]]) -> List[Tuple[float, str]]:
+    seen = set()
+    unique: List[Tuple[float, str]] = []
+    for offset, caption in captions:
+        caption = clean_text(caption)
+        if not caption:
+            continue
+        key = normalized_caption_key(caption)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append((offset, caption))
+    return unique
+
+
+def combined_visual_caption(captions: Sequence[Tuple[float, str]]) -> str:
+    unique = unique_visual_captions(captions)
+    if not unique:
+        return ""
+    if len(unique) == 1:
+        return unique[0][1]
+    parts = [f"+{offset:g}s: {caption}" for offset, caption in unique]
+    return clean_text("; ".join(parts))
+
+
 def build_items(
     frames: List[Path],
     visual_captions: List[str],
@@ -80,24 +110,54 @@ def build_items(
     sample_every: float,
     duration: Optional[float],
     max_frames: Optional[int],
+    caption_window_seconds: Optional[float] = None,
 ) -> List[CaptionItem]:
     if max_frames is not None:
         frames = frames[:max_frames]
+        visual_captions = visual_captions[:max_frames]
+    if not frames:
+        return []
+
+    window_seconds = caption_window_seconds if caption_window_seconds and caption_window_seconds > 0 else sample_every
+    frames_per_caption = max(1, int(math.ceil(window_seconds / sample_every)))
+    caption_span = frames_per_caption * sample_every
+    effective_duration = duration
+    if max_frames is not None and duration is not None:
+        effective_duration = min(duration, len(frames) * sample_every)
+
     items: List[CaptionItem] = []
-    for idx, (frame, visual) in enumerate(zip(frames, visual_captions), start=1):
-        start = (idx - 1) * sample_every
-        end = idx * sample_every if idx < len(frames) else start + sample_every
-        if duration is not None:
-            end = min(end, duration)
+    paired = list(zip(frames, visual_captions))
+    groups = [(start_idx, paired[start_idx : start_idx + frames_per_caption]) for start_idx in range(0, len(paired), frames_per_caption)]
+    if len(groups) > 1:
+        last_start_idx, _last_chunk = groups[-1]
+        last_start = last_start_idx * sample_every
+        last_end = last_start + caption_span
+        if effective_duration is not None:
+            last_end = min(last_end, effective_duration)
+        if last_end - last_start < min(3.0, caption_span):
+            previous_start_idx, previous_chunk = groups[-2]
+            groups[-2] = (previous_start_idx, previous_chunk + groups[-1][1])
+            groups.pop()
+
+    for item_index, (start_idx, chunk) in enumerate(groups, start=1):
+        if not chunk:
+            continue
+        start = start_idx * sample_every
+        end = start + (sample_every * len(chunk))
+        if effective_duration is not None:
+            end = min(end, effective_duration)
         if end <= start:
-            end = start + sample_every
+            end = start + caption_span
+        visual = combined_visual_caption(
+            ((position * sample_every, caption) for position, (_, caption) in enumerate(chunk))
+        )
         speech = speech_for_interval(transcript, start, end)
         items.append(
             CaptionItem(
-                index=idx,
+                index=item_index,
                 start=float(start),
                 end=float(end),
-                frame=frame.name,
+                frame=chunk[0][0].name,
                 visual_caption=visual,
                 speech=speech,
                 final_caption=fallback_caption(visual, speech),

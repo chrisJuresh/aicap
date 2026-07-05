@@ -23,6 +23,14 @@ from .prompts import format_prompt_template, get_prompt
 from .util import clean_text, die, read_json, write_json
 
 
+STORY_REFINEMENT_RULES = """Continuity rules:
+- Treat names, roles, relationships, and audience directions already present in this prompt as persistent facts for the whole video.
+- Each current input row is a multi-second story beat. Write one readable caption for the whole beat.
+- Make each caption advance from the previous caption instead of repeating the same idea.
+- If the visible action barely changes, use the next visible detail, speech, or story progression from the current row.
+- Stay anchored to current visual/speech evidence and do not invent unsupported actions."""
+
+
 def fit_story_context(story_summary: str, previous_captions: str, max_chars: int) -> Tuple[str, str]:
     if max_chars <= 0:
         return "", ""
@@ -90,13 +98,34 @@ def parse_caption_rows(raw: str) -> Tuple[Optional[List[Any]], str]:
     return None, ""
 
 
-def simplified_refine_prompt(chunk: List[CaptionItem], input_rows: List[Dict[str, Any]], story_summary_max_words: int) -> str:
+def simplified_refine_prompt(
+    chunk: List[CaptionItem],
+    input_rows: List[Dict[str, Any]],
+    story_summary_max_words: int,
+    mode_instruction: str = "",
+    global_context: str = "",
+    story_summary: str = "",
+    previous_captions: str = "",
+) -> str:
     ids = ", ".join(str(item.index) for item in chunk)
+    context_parts = []
+    if global_context:
+        context_parts.append(f"Global story direction:\n{global_context}")
+    if story_summary:
+        context_parts.append(f"Story memory so far:\n{story_summary}")
+    if previous_captions:
+        context_parts.append(f"Recent captions:\n{previous_captions}")
+    context = "\n\n".join(context_parts)
+    context_block = f"\n\n{context}\n" if context else ""
     return (
         "Return ONLY valid JSON. Do not include markdown or explanations.\n"
         f"Use exactly these i values, once each, in this order: {ids}.\n"
-        "Write one concise subtitle caption for each input row.\n"
+        "Write one concise, readable subtitle caption for each multi-second input row.\n"
+        "Do not repeat adjacent captions; each caption should advance the story beat.\n"
         "Use only the visible/speech evidence in the input. Do not invent unsupported events.\n"
+        f"{mode_instruction}\n"
+        f"{STORY_REFINEMENT_RULES}"
+        f"{context_block}\n"
         "The JSON must have this shape: "
         '{"captions":[{"i": number, "caption": "short caption"}], "story_summary": "brief memory"}.\n'
         f"Keep story_summary under {story_summary_max_words} words.\n\n"
@@ -114,11 +143,23 @@ def repair_refine_batch(
     seed: Optional[int],
     num_ctx: Optional[int],
     story_summary_max_words: int,
+    mode_instruction: str = "",
+    global_context: str = "",
+    story_summary: str = "",
+    previous_captions: str = "",
 ) -> Tuple[Dict[int, str], str]:
     raw = ollama_generate(
         host,
         text_model,
-        simplified_refine_prompt(chunk, input_rows, story_summary_max_words),
+        simplified_refine_prompt(
+            chunk,
+            input_rows,
+            story_summary_max_words,
+            mode_instruction=mode_instruction,
+            global_context=global_context,
+            story_summary=story_summary,
+            previous_captions=previous_captions,
+        ),
         temperature=0.0,
         num_predict=1400,
         timeout=900,
@@ -265,7 +306,17 @@ def _refine_independent_batches(
                 print(f"LLM omitted {len(missing_indices)} caption(s) in one batch; retrying.", file=sys.stderr)
         if missing_indices:
             print("Trying simplified refinement repair for one batch.", file=sys.stderr)
-            repaired, _ = repair_refine_batch(chunk, input_rows, host, text_model, keep_alive, seed, num_ctx, 120)
+            repaired, _ = repair_refine_batch(
+                chunk,
+                input_rows,
+                host,
+                text_model,
+                keep_alive,
+                seed,
+                num_ctx,
+                120,
+                mode_instruction=get_prompt(prompts, "refine", mode_key),
+            )
             if repaired:
                 by_index = repaired
                 missing_indices = missing_caption_indices(chunk, by_index)
@@ -317,6 +368,7 @@ def _refine_story_batches(
     completed_items: List[CaptionItem] = []
     mode_key = "explicit_mode_instruction" if caption_mode == "explicit" else "neutral_mode_instruction"
     mode_instruction = get_prompt(prompts, "refine", mode_key)
+    global_context = get_prompt(prompts, "story", "global_context")
 
     for start_idx in tqdm(range(0, len(items), batch_size), unit="batch"):
         chunk = items[start_idx : start_idx + batch_size]
@@ -347,11 +399,13 @@ def _refine_story_batches(
         prompt = format_prompt_template(
             get_prompt(prompts, "story", "template"),
             mode_instruction=mode_instruction,
+            global_context=global_context,
             story_summary=fitted_story or get_prompt(prompts, "story", "empty_story_summary"),
             previous_captions=fitted_previous or get_prompt(prompts, "story", "empty_previous_captions"),
             input_json=json.dumps(input_rows, ensure_ascii=False),
             story_summary_max_words=str(story_summary_max_words),
         )
+        prompt = f"{STORY_REFINEMENT_RULES}\n\n{prompt}"
         check_ollama(host)
         new_summary = ""
         by_index: Dict[int, str] = {}
@@ -395,6 +449,10 @@ def _refine_story_batches(
                 seed,
                 num_ctx,
                 story_summary_max_words,
+                mode_instruction=mode_instruction,
+                global_context=global_context,
+                story_summary=fitted_story,
+                previous_captions=fitted_previous,
             )
             if repaired:
                 by_index = repaired

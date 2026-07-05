@@ -14,9 +14,13 @@ from .models import VideoJob
 from .ollama import unload_ollama_model
 from .prompts import get_prompt, visual_prompt
 from .refine import load_story_refine_cache, refine_with_llm
-from .subtitles import burn_captions_to_video, write_srt, write_vtt
+from .subtitles import SUBTITLE_LAYOUT_VERSION, burn_captions_to_video, write_srt, write_vtt
 from .util import die, file_fingerprint, items_hash, json_fingerprint, read_json, write_json
 from .visual import caption_frames_cached
+
+
+CAPTION_ITEM_VERSION = 2
+STORY_REFINEMENT_RULES_VERSION = 2
 
 
 def prepare_signature(job: VideoJob, args: argparse.Namespace) -> Dict[str, Any]:
@@ -31,7 +35,7 @@ def prepare_signature(job: VideoJob, args: argparse.Namespace) -> Dict[str, Any]
     }
 
 
-def visual_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
+def visual_cache_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
     return {
         "source": file_fingerprint(job.video_path),
         "sample_every": args.sample_every,
@@ -48,11 +52,32 @@ def visual_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str,
     }
 
 
+def visual_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
+    signature = visual_cache_signature(job, args, prompts)
+    signature.update(
+        {
+            "caption_item_version": CAPTION_ITEM_VERSION,
+            "caption_window_seconds": args.caption_window_seconds,
+        }
+    )
+    return signature
+
+
 def refine_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
     mode_key = "explicit_mode_instruction" if args.caption_mode == "explicit" else "neutral_mode_instruction"
     prompt_blob = get_prompt(prompts, "refine", mode_key) + "\n" + get_prompt(prompts, "refine", "template")
+    story_prompt_blob = "\n".join(
+        [
+            get_prompt(prompts, "story", "template"),
+            get_prompt(prompts, "story", "global_context"),
+            get_prompt(prompts, "story", "empty_story_summary"),
+            get_prompt(prompts, "story", "empty_previous_captions"),
+        ]
+    )
     return {
         "source": file_fingerprint(job.video_path),
+        "caption_item_version": CAPTION_ITEM_VERSION,
+        "caption_window_seconds": args.caption_window_seconds,
         "caption_mode": args.caption_mode,
         "text_model": args.text_model,
         "refine_batch_size": args.refine_batch_size,
@@ -65,7 +90,8 @@ def refine_signature(job: VideoJob, args: argparse.Namespace, prompts: Dict[str,
         "story_previous_captions": args.story_previous_captions,
         "story_context_max_chars": args.story_context_max_chars,
         "story_summary_max_words": args.story_summary_max_words,
-        "story_prompt_hash": hashlib.sha256((get_prompt(prompts, "story", "template") + "\n" + get_prompt(prompts, "story", "empty_story_summary") + "\n" + get_prompt(prompts, "story", "empty_previous_captions")).encode("utf-8")).hexdigest(),
+        "story_rules_version": STORY_REFINEMENT_RULES_VERSION,
+        "story_prompt_hash": hashlib.sha256(story_prompt_blob.encode("utf-8")).hexdigest(),
         "refine_prompt_hash": hashlib.sha256(prompt_blob.encode("utf-8")).hexdigest(),
         "raw_items_hash": items_hash(job.items or []),
     }
@@ -75,8 +101,11 @@ def outputs_signature(job: VideoJob, args: argparse.Namespace, prompts: Optional
     signature: Dict[str, Any] = {
         "source": file_fingerprint(job.video_path),
         "items_hash": items_hash(job.items or []),
+        "caption_item_version": CAPTION_ITEM_VERSION,
+        "caption_window_seconds": args.caption_window_seconds,
         "burn_in": args.burn_in,
         "caption_placement": args.caption_placement,
+        "subtitle_layout_version": SUBTITLE_LAYOUT_VERSION,
         "subtitle_font": args.subtitle_font,
         "subtitle_font_size": args.subtitle_font_size,
         "subtitle_font_size_percent": args.subtitle_font_size_percent,
@@ -92,6 +121,7 @@ def outputs_signature(job: VideoJob, args: argparse.Namespace, prompts: Optional
         signature.update(
             {
                 "sample_every": args.sample_every,
+                "caption_window_seconds": args.caption_window_seconds,
                 "frame_width": args.frame_width,
                 "jpeg_quality": args.jpeg_quality,
                 "max_frames": args.max_frames,
@@ -117,7 +147,17 @@ def outputs_signature(job: VideoJob, args: argparse.Namespace, prompts: Optional
                 "refine_prompt_hash": hashlib.sha256((get_prompt(prompts, "refine", mode_key) + "\n" + get_prompt(prompts, "refine", "template")).encode("utf-8")).hexdigest()
                 if args.refine
                 else None,
-                "story_prompt_hash": hashlib.sha256((get_prompt(prompts, "story", "template") + "\n" + get_prompt(prompts, "story", "empty_story_summary") + "\n" + get_prompt(prompts, "story", "empty_previous_captions")).encode("utf-8")).hexdigest()
+                "story_rules_version": STORY_REFINEMENT_RULES_VERSION if args.refine and args.story_context else None,
+                "story_prompt_hash": hashlib.sha256(
+                    "\n".join(
+                        [
+                            get_prompt(prompts, "story", "template"),
+                            get_prompt(prompts, "story", "global_context"),
+                            get_prompt(prompts, "story", "empty_story_summary"),
+                            get_prompt(prompts, "story", "empty_previous_captions"),
+                        ]
+                    ).encode("utf-8")
+                ).hexdigest()
                 if args.refine and args.story_context
                 else None,
             }
@@ -187,6 +227,7 @@ def run_stage_visual_captions(jobs: List[VideoJob], args: argparse.Namespace, pr
         frames = job.frames or []
         transcript = job.transcript or []
         sig = visual_signature(job, args, prompts)
+        cache_sig = visual_cache_signature(job, args, prompts)
         raw_path = job.out_dir / "raw_captions.json"
         visual_cache_path = resume_dir(job) / "visual_frame_captions.jsonl"
         if resume_enabled(args) and checkpoint_matches(job, "visual", sig) and raw_path.exists():
@@ -195,14 +236,14 @@ def run_stage_visual_captions(jobs: List[VideoJob], args: argparse.Namespace, pr
                 job.items = loaded_items
                 print(f"Resume: skipping visual captioning; loaded {len(job.items)} item(s) from {raw_path}.")
                 continue
-        if not resume_enabled(args) or not checkpoint_matches(job, "visual_cache", sig):
+        if not resume_enabled(args) or not checkpoint_matches(job, "visual_cache", cache_sig):
             try:
                 visual_cache_path.unlink()
             except FileNotFoundError:
                 pass
             except Exception:
                 pass
-            write_checkpoint(job, "visual_cache", sig, {"cache": str(visual_cache_path)})
+            write_checkpoint(job, "visual_cache", cache_sig, {"cache": str(visual_cache_path)})
         frames_for_cache_check = frames[: args.max_frames] if args.max_frames is not None else frames
         cached_before = load_visual_cache(visual_cache_path)
         if any(frame.name not in cached_before for frame in frames_for_cache_check):
@@ -220,7 +261,15 @@ def run_stage_visual_captions(jobs: List[VideoJob], args: argparse.Namespace, pr
             args.ollama_seed,
             args.ollama_num_ctx,
         )
-        job.items = build_items(frames, visual_captions, transcript, args.sample_every, job.duration, args.max_frames)
+        job.items = build_items(
+            frames,
+            visual_captions,
+            transcript,
+            args.sample_every,
+            job.duration,
+            args.max_frames,
+            args.caption_window_seconds,
+        )
         save_items_snapshot(raw_path, job.items)
         write_checkpoint(job, "visual", sig, {"item_count": len(job.items), "raw_captions": str(raw_path)})
         print(f"Wrote {raw_path}")

@@ -41,9 +41,16 @@ Input JSON:
 '''
 
 [story]
+# Optional persistent story facts or audience direction for every video.
+# Leave blank unless you need the refiner to preserve names, roles, or framing across all batches.
+global_context = ""
+
 template = '''
 You combine visual frame descriptions and speech transcripts into subtitle captions that read like a coherent story.
 Use the story memory and recent captions only for continuity: names, roles, setting, actions already established, and pronoun clarity.
+Treat global names, roles, relationships, and audience directions as persistent facts for the whole video.
+Each input row is a multi-second story beat; write one readable caption for that whole beat.
+Make each caption advance from the previous caption instead of restating the same idea.
 Do not invent events that are not supported by the current input.
 Return ONLY a valid JSON object. Do not include markdown.
 The object must have this exact shape: {{"captions": [{{"i": number, "caption": "short caption"}}], "story_summary": "brief updated memory for the next batch"}}.
@@ -51,6 +58,9 @@ Use the exact i values from the current input JSON. Do not renumber, replace, or
 Captions should be concise SRT subtitles, but they should follow naturally from the previous video context.
 Keep story_summary compact and under {story_summary_max_words} words.
 {mode_instruction}
+
+Global story direction:
+{global_context}
 
 Story memory so far:
 {story_summary}
