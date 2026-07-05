@@ -147,6 +147,8 @@ def repair_refine_batch(
     global_context: str = "",
     story_summary: str = "",
     previous_captions: str = "",
+    model_log_path: Optional[Path] = None,
+    log_context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[int, str], str]:
     raw = ollama_generate(
         host,
@@ -167,6 +169,8 @@ def repair_refine_batch(
         seed=seed,
         num_ctx=num_ctx,
         response_format="json",
+        log_path=model_log_path,
+        log_context=log_context,
     )
     rows, summary = parse_caption_rows(raw)
     if rows is None:
@@ -192,6 +196,7 @@ def refine_with_llm(
     story_previous_captions: int = 18,
     story_context_max_chars: int = 4000,
     story_summary_max_words: int = 140,
+    model_log_path: Optional[Path] = None,
 ) -> List[CaptionItem]:
     if not text_model:
         return items
@@ -211,6 +216,7 @@ def refine_with_llm(
             llm_retries,
             strict_refine,
             cache_path,
+            model_log_path,
         )
 
     return _refine_story_batches(
@@ -230,6 +236,7 @@ def refine_with_llm(
         story_previous_captions,
         story_context_max_chars,
         story_summary_max_words,
+        model_log_path,
     )
 
 
@@ -247,6 +254,7 @@ def _refine_independent_batches(
     llm_retries: int,
     strict_refine: bool,
     cache_path: Optional[Path],
+    model_log_path: Optional[Path],
 ) -> List[CaptionItem]:
     cached_refined: Dict[str, str] = {}
     if cache_path is not None:
@@ -292,6 +300,15 @@ def _refine_independent_batches(
                 seed=seed,
                 num_ctx=num_ctx,
                 response_format="json",
+                log_path=model_log_path,
+                log_context={
+                    "stage": "refine",
+                    "mode": "independent",
+                    "batch_start": chunk[0].index if chunk else None,
+                    "batch_end": chunk[-1].index if chunk else None,
+                    "attempt": attempt + 1,
+                    "caption_indices": [item.index for item in chunk],
+                },
             )
             parsed_rows, _ = parse_caption_rows(raw)
             if parsed_rows is None:
@@ -316,6 +333,14 @@ def _refine_independent_batches(
                 num_ctx,
                 120,
                 mode_instruction=get_prompt(prompts, "refine", mode_key),
+                model_log_path=model_log_path,
+                log_context={
+                    "stage": "refine_repair",
+                    "mode": "independent",
+                    "batch_start": chunk[0].index if chunk else None,
+                    "batch_end": chunk[-1].index if chunk else None,
+                    "caption_indices": [item.index for item in chunk],
+                },
             )
             if repaired:
                 by_index = repaired
@@ -352,6 +377,7 @@ def _refine_story_batches(
     story_previous_captions: int,
     story_context_max_chars: int,
     story_summary_max_words: int,
+    model_log_path: Optional[Path],
 ) -> List[CaptionItem]:
     cache = load_story_refine_cache(cache_path)
     cached_refined = cache["captions"]
@@ -423,6 +449,14 @@ def _refine_story_batches(
                 seed=seed,
                 num_ctx=num_ctx,
                 response_format="json",
+                log_path=model_log_path,
+                log_context={
+                    "stage": "story_refine",
+                    "mode": "story",
+                    "batch_key": batch_key,
+                    "attempt": attempt + 1,
+                    "caption_indices": [item.index for item in chunk],
+                },
             )
             parsed_captions, new_summary = parse_caption_rows(raw)
             new_summary = clamp_words(new_summary, story_summary_max_words)
@@ -453,6 +487,13 @@ def _refine_story_batches(
                 global_context=global_context,
                 story_summary=fitted_story,
                 previous_captions=fitted_previous,
+                model_log_path=model_log_path,
+                log_context={
+                    "stage": "story_refine_repair",
+                    "mode": "story",
+                    "batch_key": batch_key,
+                    "caption_indices": [item.index for item in chunk],
+                },
             )
             if repaired:
                 by_index = repaired

@@ -36,6 +36,7 @@ BLOCKED_SUFFIXES = {
 }
 
 LOCAL_ONLY_FILENAMES = {
+    "model_io.jsonl",
     "prompts.toml",
     "settings.toml",
 }

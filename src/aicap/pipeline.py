@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import shutil
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .cache import checkpoint_matches, load_visual_cache, resume_dir, resume_enabled, write_checkpoint
@@ -165,6 +166,12 @@ def outputs_signature(job: VideoJob, args: argparse.Namespace, prompts: Optional
     return signature
 
 
+def model_io_log_path(job: VideoJob, args: argparse.Namespace) -> Optional[Path]:
+    if not getattr(args, "model_io_log", True):
+        return None
+    return job.out_dir / "model_io.jsonl"
+
+
 def run_stage_prepare_and_transcribe(jobs: List[VideoJob], args: argparse.Namespace, prompts: Dict[str, Dict[str, str]], is_batch: bool) -> None:
     whisper_model_obj: Optional[Any] = None
     for job_index, job in enumerate(jobs, start=1):
@@ -260,6 +267,7 @@ def run_stage_visual_captions(jobs: List[VideoJob], args: argparse.Namespace, pr
             args.visual_temperature,
             args.ollama_seed,
             args.ollama_num_ctx,
+            model_io_log_path(job, args),
         )
         job.items = build_items(
             frames,
@@ -329,6 +337,7 @@ def run_stage_refine(jobs: List[VideoJob], args: argparse.Namespace, prompts: Di
             story_previous_captions=args.story_previous_captions,
             story_context_max_chars=args.story_context_max_chars,
             story_summary_max_words=args.story_summary_max_words,
+            model_log_path=model_io_log_path(job, args),
         )
         save_items_snapshot(refined_path, job.items)
         write_checkpoint(job, "refine", sig, {"item_count": len(job.items), "refined_captions": str(refined_path)})

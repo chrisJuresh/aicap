@@ -26,6 +26,11 @@ class PrivateContentGuardTests(unittest.TestCase):
 
         self.assertTrue(any("local-only config" in issue for issue in issues))
 
+    def test_model_io_log_is_blocked(self) -> None:
+        issues = guard.path_issues(guard.ROOT / "model_io.jsonl")
+
+        self.assertTrue(any("local-only config" in issue for issue in issues))
+
     def test_sensitive_text_is_blocked_in_examples_too(self) -> None:
         path = guard.ROOT / "prompts.toml.example"
         blocked_word = base64.b64decode("bnNmdw==")

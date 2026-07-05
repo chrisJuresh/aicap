@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional
 
 import requests
 
-from .util import die
+from .util import append_jsonl, die
 
 
 def check_ollama(host: str) -> None:
@@ -17,6 +21,19 @@ def check_ollama(host: str) -> None:
             "Could not connect to Ollama at "
             f"{host}. Start Ollama first. On Windows, open Ollama or run: ollama serve\nDetails: {e}"
         )
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def write_model_io_log(log_path: Optional[Path], row: Dict[str, Any]) -> None:
+    if log_path is None:
+        return
+    try:
+        append_jsonl(log_path, row)
+    except Exception as e:
+        print(f"Warning: could not write model I/O log {log_path}: {e}", file=sys.stderr)
 
 
 def ollama_generate(
@@ -31,6 +48,8 @@ def ollama_generate(
     seed: Optional[int] = None,
     num_ctx: Optional[int] = None,
     response_format: Optional[str] = None,
+    log_path: Optional[Path] = None,
+    log_context: Optional[Dict[str, Any]] = None,
 ) -> str:
     options: Dict[str, Any] = {"temperature": temperature, "num_predict": num_predict}
     if seed is not None and seed >= 0:
@@ -48,17 +67,69 @@ def ollama_generate(
         payload["format"] = response_format
     if images:
         payload["images"] = images
+    request_id = uuid.uuid4().hex
+    started_at = utc_timestamp()
+    started = time.perf_counter()
+    base_log: Dict[str, Any] = {
+        "timestamp": started_at,
+        "request_id": request_id,
+        "context": log_context or {},
+        "host": host,
+        "model": model,
+        "options": options,
+        "keep_alive": keep_alive,
+        "response_format": response_format,
+        "image_count": len(images or []),
+        "prompt": prompt,
+    }
     try:
         r = requests.post(f"{host.rstrip('/')}/api/generate", json=payload, timeout=timeout)
         if r.status_code == 404:
+            write_model_io_log(
+                log_path,
+                {
+                    **base_log,
+                    "duration_seconds": round(time.perf_counter() - started, 3),
+                    "status": "error",
+                    "error": f"Ollama model not found: {model}",
+                },
+            )
             die(f"Ollama model not found: {model}. Pull it first with: ollama pull {model}")
         r.raise_for_status()
         data = r.json()
-        return str(data.get("response", ""))
+        response = str(data.get("response", ""))
+        write_model_io_log(
+            log_path,
+            {
+                **base_log,
+                "duration_seconds": round(time.perf_counter() - started, 3),
+                "status": "ok",
+                "response": response,
+            },
+        )
+        return response
     except requests.HTTPError as e:
         detail = e.response.text[:1000] if e.response is not None else str(e)
+        write_model_io_log(
+            log_path,
+            {
+                **base_log,
+                "duration_seconds": round(time.perf_counter() - started, 3),
+                "status": "error",
+                "error": detail,
+            },
+        )
         die(f"Ollama request failed for model {model}: {detail}")
     except Exception as e:
+        write_model_io_log(
+            log_path,
+            {
+                **base_log,
+                "duration_seconds": round(time.perf_counter() - started, 3),
+                "status": "error",
+                "error": str(e),
+            },
+        )
         die(f"Ollama request failed for model {model}: {e}")
 
 

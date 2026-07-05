@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Dict
 
 
-DEFAULT_VISION_MODEL = "huihui_ai/qwen2.5-vl-abliterated:latest"
-DEFAULT_TEXT_MODEL = "richardyoung/qwen3-14b-abliterated:Q4_K_M"
+DEFAULT_VISION_MODEL = "huihui_ai/qwen3.5-abliterated:9b-q4_K"
+DEFAULT_TEXT_MODEL = "richardyoung/qwythos-9b-abliterated:Q8_0"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_PROMPTS_PATH = Path(__file__).resolve().parents[2] / "prompts.toml"
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parents[2] / "settings.toml"

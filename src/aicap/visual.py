@@ -24,6 +24,7 @@ def caption_frames_cached(
     temperature: float,
     seed: Optional[int],
     num_ctx: Optional[int],
+    model_log_path: Optional[Path] = None,
 ) -> List[str]:
     if max_frames is not None:
         frames = frames[:max_frames]
@@ -50,6 +51,13 @@ def caption_frames_cached(
             keep_alive=keep_alive,
             seed=seed,
             num_ctx=num_ctx,
+            log_path=model_log_path,
+            log_context={
+                "stage": "visual",
+                "caption_mode": caption_mode,
+                "frame": frame.name,
+                "cache_path": str(cache_path),
+            },
         )
         caption = clean_text(raw)
         captions_by_frame[frame.name] = caption

@@ -57,6 +57,7 @@ ARG_FLAG_NAMES: Dict[str, Tuple[str, ...]] = {
     "video_preset": ("--video-preset",),
     "output_browser": ("--output-browser", "--no-output-browser"),
     "open_output_browser": ("--open-output-browser", "--no-open-output-browser"),
+    "model_io_log": ("--model-io-log", "--no-model-io-log"),
     "batch_chunk_size": ("--batch-chunk-size",),
     "keep_temp": ("--keep-temp", "--no-keep-temp"),
     "resume": ("--resume", "--no-resume"),
@@ -208,6 +209,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--video-preset", default=cfg("video_preset", "medium"), help="x264 preset for captioned MP4, e.g. ultrafast, veryfast, medium, slow")
     p.add_argument("--output-browser", action=argparse.BooleanOptionalAction, default=cfg("output_browser", True), help="Write index.html in the output folder for browsing generated videos and captions")
     p.add_argument("--open-output-browser", action=argparse.BooleanOptionalAction, default=cfg("open_output_browser", False), help="Open the generated output browser when processing finishes")
+    p.add_argument("--model-io-log", action=argparse.BooleanOptionalAction, default=cfg("model_io_log", True), help="Write model_io.jsonl beside each output with the exact prompt text and raw model response")
     p.add_argument("--batch-chunk-size", type=int, default=cfg("batch_chunk_size", 0), help="In folder batch mode, finish and write outputs every N videos. Use 0 to process the whole folder as one batch")
     p.add_argument("--keep-temp", action=argparse.BooleanOptionalAction, default=cfg("keep_temp", False), help="Keep extracted frames and audio")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=cfg("resume", True), help="Resume from completed checkpoints and cached intermediate files. Enabled by default")

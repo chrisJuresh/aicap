@@ -15,8 +15,8 @@ ollama_host = "http://localhost:11434"
 ollama_keep_alive = "30m"
 ollama_num_ctx = 8192
 ollama_seed = 42
-vision_model = "huihui_ai/qwen2.5-vl-abliterated:latest"
-text_model = "richardyoung/qwen3-14b-abliterated:Q4_K_M"
+vision_model = "huihui_ai/qwen3.5-abliterated:9b-q4_K"
+text_model = "richardyoung/qwythos-9b-abliterated:Q8_0"
 
 [captioning]
 caption_mode = "neutral"
@@ -60,4 +60,5 @@ force = false
 keep_temp = false
 output_browser = true
 open_output_browser = false
+model_io_log = true
 batch_chunk_size = 0

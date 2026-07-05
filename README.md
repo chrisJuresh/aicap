@@ -28,8 +28,8 @@ The implementation is split into small modules under `src/aicap`:
 
 The default model choices are aimed at an RTX 3080 Ti 12 GB:
 
-- Vision model: `huihui_ai/qwen2.5-vl-abliterated:latest`
-- Text model: `richardyoung/qwen3-14b-abliterated:Q4_K_M`
+- Vision model: `huihui_ai/qwen3.5-abliterated:9b-q4_K`
+- Text model: `richardyoung/qwythos-9b-abliterated:Q8_0`
 - Whisper model: `large-v3-turbo`
 
 Use only with lawful media you have the right to process. Do not process illegal, abusive, coercive, or exploitative material.
@@ -62,8 +62,8 @@ If you already have the models or want to pull them manually:
 Manual model pulls:
 
 ```powershell
-ollama pull huihui_ai/qwen2.5-vl-abliterated:latest
-ollama pull richardyoung/qwen3-14b-abliterated:Q4_K_M
+ollama pull huihui_ai/qwen3.5-abliterated:9b-q4_K
+ollama pull richardyoung/qwythos-9b-abliterated:Q8_0
 ```
 
 ---
@@ -211,6 +211,7 @@ Outputs will be written to `output`:
 - `captions.json` - structured final captions
 - `raw_captions.json` - raw visual + speech captions before final LLM cleanup
 - `transcript.json` - Whisper speech transcript
+- `model_io.jsonl` - exact model prompts and raw model replies for future review
 
 
 ---
@@ -339,6 +340,8 @@ Disable resume for one run:
 ```
 
 Changing important settings, such as `--sample-every`, `--vision-model`, `--text-model`, `--caption-mode`, story-context settings, or prompt text in `prompts.toml`, automatically invalidates the affected cached stage and reruns it.
+
+When `model_io_log = true`, each output folder also gets `model_io.jsonl`. It records the exact prompt sent to each model and the raw reply returned by Ollama, including failed JSON attempts and repair attempts. This file can contain private prompt/output text, so it is generated under ignored output folders and is blocked by the private-content guard if staged directly.
 
 
 ---
@@ -527,14 +530,20 @@ The 3080 Ti has 12 GB VRAM, so close games, browsers with video tabs, and other 
 Use a different vision model:
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --vision-model qwen2.5vl:7b
+.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --vision-model huihui_ai/qwen3.5-abliterated:9b-q4_K
 ```
 
 Use a different text model:
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --text-model qwen3:14b --refine
+.\.venv\Scripts\python.exe .\src\video_captioner.py "C:\Path\To\video.mp4" --text-model richardyoung/qwythos-9b-abliterated:Q8_0 --refine
 ```
+
+Good 12 GB alternatives to try if the default pair is slow or unstable:
+
+- Vision: `maxwellb/gemma4-12b-it-oym:q4_K_S`
+- Vision fallback: `huihui_ai/qwen2.5-vl-abliterated:7b`
+- Text fallback: `richardyoung/qwythos-9b-abliterated:Q5_K_M`
 
 ---
 

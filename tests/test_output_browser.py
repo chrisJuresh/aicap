@@ -23,6 +23,7 @@ class OutputBrowserTests(unittest.TestCase):
             job_dir.mkdir(parents=True)
             (job_dir / "captioned_video.mp4").write_bytes(b"")
             (job_dir / "captions.srt").write_text("1\n", encoding="utf-8")
+            (job_dir / "model_io.jsonl").write_text('{"prompt":"p","response":"r"}\n', encoding="utf-8")
             job = VideoJob(
                 video_path=root / "source video.mp4",
                 out_dir=job_dir,
@@ -51,6 +52,7 @@ class OutputBrowserTests(unittest.TestCase):
             self.assertIn('"auto_refresh": true', html)
             self.assertIn("final caption", html)
             self.assertIn("A%20Video/captioned_video.mp4", html)
+            self.assertIn("A%20Video/model_io.jsonl", html)
 
     def test_relative_url_quotes_spaces(self) -> None:
         base = Path("C:/tmp/out")

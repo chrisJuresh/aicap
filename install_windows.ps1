@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-  [string]$VisionModel = "huihui_ai/qwen2.5-vl-abliterated:latest",
-  [string]$TextModel = "richardyoung/qwen3-14b-abliterated:Q4_K_M",
+  [string]$VisionModel = "huihui_ai/qwen3.5-abliterated:9b-q4_K",
+  [string]$TextModel = "richardyoung/qwythos-9b-abliterated:Q8_0",
   [switch]$SkipModelPull
 )
 

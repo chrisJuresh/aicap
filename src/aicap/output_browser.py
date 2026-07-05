@@ -39,6 +39,7 @@ def browser_job_payload(base_dir: Path, job: VideoJob, args: Any, is_batch: bool
         "raw_captions_json": existing_file(base_dir, job.out_dir / "raw_captions.json"),
         "refined_captions_json": existing_file(base_dir, job.out_dir / "refined_captions.json"),
         "transcript_json": existing_file(base_dir, job.out_dir / "transcript.json"),
+        "model_io_log": existing_file(base_dir, job.out_dir / "model_io.jsonl"),
     }
     captions = [asdict(item) for item in (job.items or [])]
     caption_text = " ".join(
@@ -472,7 +473,8 @@ def render_output_browser(payload: Dict[str, Any]) -> str:
         ["captions_json", "Captions JSON"],
         ["raw_captions_json", "Raw JSON"],
         ["refined_captions_json", "Refined JSON"],
-        ["transcript_json", "Transcript"]
+        ["transcript_json", "Transcript"],
+        ["model_io_log", "Model I/O Log"]
       ];
       return labels
         .filter(([key]) => job.files[key])
