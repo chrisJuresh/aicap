@@ -9,7 +9,7 @@ import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from .models import CaptionItem
 
@@ -54,10 +54,90 @@ def run_cmd(cmd: List[str], cwd: Optional[Path] = None) -> subprocess.CompletedP
         die(f"Command failed: {' '.join(cmd)}")
 
 
-def require_exe(name: str) -> str:
+def executable_names(name: str) -> List[str]:
+    names = [name]
+    if os.name == "nt" and not name.lower().endswith(".exe"):
+        names.append(name + ".exe")
+    return names
+
+
+def existing_exe(paths: Iterable[Path]) -> Optional[str]:
+    for path in paths:
+        try:
+            if path.exists() and path.is_file():
+                return str(path)
+        except Exception:
+            continue
+    return None
+
+
+def winget_package_roots() -> List[Path]:
+    roots: List[Path] = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        roots.append(Path(local_appdata) / "Microsoft" / "WinGet" / "Packages")
+    return roots
+
+
+def find_winget_exe(name: str) -> Optional[str]:
+    candidates: List[Path] = []
+    for root in winget_package_roots():
+        if not root.exists():
+            continue
+        for exe_name in executable_names(name):
+            candidates.extend(root.glob(f"**/{exe_name}"))
+    return existing_exe(sorted(candidates, key=lambda path: str(path).lower()))
+
+
+def find_ffmpeg_family_exe(name: str) -> Optional[str]:
+    env_dir = os.environ.get("AICAP_FFMPEG_DIR")
+    if env_dir:
+        found = existing_exe(Path(env_dir) / exe_name for exe_name in executable_names(name))
+        if found:
+            return found
+
+    for sibling_name in ("ffmpeg", "ffprobe"):
+        sibling = shutil.which(sibling_name)
+        if sibling:
+            sibling_dir = Path(sibling).resolve().parent
+            found = existing_exe(sibling_dir / exe_name for exe_name in executable_names(name))
+            if found:
+                return found
+
+    found = find_winget_exe(name)
+    if found:
+        return found
+
+    common_dirs = [
+        Path.home() / "scoop" / "shims",
+        Path.home() / "scoop" / "apps" / "ffmpeg" / "current" / "bin",
+        Path("C:/ProgramData/chocolatey/bin"),
+        Path("C:/ffmpeg/bin"),
+    ]
+    for folder in common_dirs:
+        found = existing_exe(folder / exe_name for exe_name in executable_names(name))
+        if found:
+            return found
+
+    return None
+
+
+def find_exe(name: str) -> Optional[str]:
     exe = shutil.which(name)
+    if exe:
+        return exe
+    path = Path(name)
+    if path.exists() and path.is_file():
+        return str(path)
+    if name.lower().removesuffix(".exe") in {"ffmpeg", "ffprobe"}:
+        return find_ffmpeg_family_exe(name)
+    return None
+
+
+def require_exe(name: str) -> str:
+    exe = find_exe(name)
     if not exe:
-        die(f"{name} was not found on PATH. Run install_windows.ps1 or install {name} manually.")
+        die(f"{name} was not found. Run install_windows.ps1 or install {name} manually.")
     return exe
 
 

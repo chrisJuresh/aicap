@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import base64
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .models import TranscriptSegment
-from .util import clean_text, die, require_exe, run_cmd
+from .util import clean_text, die, find_exe, require_exe, run_cmd
 
 
 def image_to_base64(path: Path) -> str:
@@ -17,7 +16,7 @@ def image_to_base64(path: Path) -> str:
 
 
 def ffprobe_duration(video_path: Path) -> Optional[float]:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = find_exe("ffprobe")
     if not ffprobe:
         return None
     try:
@@ -33,7 +32,7 @@ def ffprobe_duration(video_path: Path) -> Optional[float]:
 
 
 def ffprobe_video_size(video_path: Path) -> Optional[Tuple[int, int]]:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = find_exe("ffprobe")
     if not ffprobe:
         return None
     try:
@@ -65,7 +64,7 @@ def ffprobe_video_size(video_path: Path) -> Optional[Tuple[int, int]]:
 
 
 def ffprobe_audio_streams(video_path: Path) -> List[Dict[str, Any]]:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = find_exe("ffprobe")
     if not ffprobe:
         return []
     try:
