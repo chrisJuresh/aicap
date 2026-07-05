@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from .captions import (
     caption_rows_from_payload,
+    caption_rows_from_text,
     captions_by_chunk_from_rows,
     clamp_words,
     extract_json_array,
@@ -68,6 +69,68 @@ def _handle_refine_failure(message: str, strict_refine: bool, fallback_text: str
         die(message + " Stopping because strict refinement is enabled.")
     print(message + f" {fallback_text}", file=sys.stderr)
     return False
+
+
+def parse_caption_rows(raw: str) -> Tuple[Optional[List[Any]], str]:
+    parsed_obj = extract_json_object(raw)
+    if parsed_obj is not None:
+        rows = caption_rows_from_payload(parsed_obj)
+        summary = clean_text(str(parsed_obj.get("story_summary", "")))
+        if rows is not None:
+            return rows, summary
+
+    rows = caption_rows_from_payload(extract_json_array(raw))
+    if rows is not None:
+        return rows, ""
+
+    text_rows = caption_rows_from_text(raw)
+    if text_rows:
+        return text_rows, ""
+
+    return None, ""
+
+
+def simplified_refine_prompt(chunk: List[CaptionItem], input_rows: List[Dict[str, Any]], story_summary_max_words: int) -> str:
+    ids = ", ".join(str(item.index) for item in chunk)
+    return (
+        "Return ONLY valid JSON. Do not include markdown or explanations.\n"
+        f"Use exactly these i values, once each, in this order: {ids}.\n"
+        "Write one concise subtitle caption for each input row.\n"
+        "Use only the visible/speech evidence in the input. Do not invent unsupported events.\n"
+        "The JSON must have this shape: "
+        '{"captions":[{"i": number, "caption": "short caption"}], "story_summary": "brief memory"}.\n'
+        f"Keep story_summary under {story_summary_max_words} words.\n\n"
+        "Input JSON:\n"
+        f"{json.dumps(input_rows, ensure_ascii=False)}"
+    )
+
+
+def repair_refine_batch(
+    chunk: List[CaptionItem],
+    input_rows: List[Dict[str, Any]],
+    host: str,
+    text_model: str,
+    keep_alive: str,
+    seed: Optional[int],
+    num_ctx: Optional[int],
+    story_summary_max_words: int,
+) -> Tuple[Dict[int, str], str]:
+    raw = ollama_generate(
+        host,
+        text_model,
+        simplified_refine_prompt(chunk, input_rows, story_summary_max_words),
+        temperature=0.0,
+        num_predict=1400,
+        timeout=900,
+        keep_alive=keep_alive,
+        seed=seed,
+        num_ctx=num_ctx,
+        response_format="json",
+    )
+    rows, summary = parse_caption_rows(raw)
+    if rows is None:
+        return {}, ""
+    return captions_by_chunk_from_rows(rows, chunk), summary
 
 
 def refine_with_llm(
@@ -189,10 +252,7 @@ def _refine_independent_batches(
                 num_ctx=num_ctx,
                 response_format="json",
             )
-            parsed_obj = extract_json_object(raw)
-            parsed_rows = caption_rows_from_payload(parsed_obj) if parsed_obj is not None else None
-            if parsed_rows is None:
-                parsed_rows = caption_rows_from_payload(extract_json_array(raw))
+            parsed_rows, _ = parse_caption_rows(raw)
             if parsed_rows is None:
                 if attempt < llm_retries:
                     print("Could not parse LLM JSON for one batch; retrying.", file=sys.stderr)
@@ -203,6 +263,12 @@ def _refine_independent_batches(
                 break
             if attempt < llm_retries:
                 print(f"LLM omitted {len(missing_indices)} caption(s) in one batch; retrying.", file=sys.stderr)
+        if missing_indices:
+            print("Trying simplified refinement repair for one batch.", file=sys.stderr)
+            repaired, _ = repair_refine_batch(chunk, input_rows, host, text_model, keep_alive, seed, num_ctx, 120)
+            if repaired:
+                by_index = repaired
+                missing_indices = missing_caption_indices(chunk, by_index)
         if not by_index:
             if not _handle_refine_failure("Could not parse LLM JSON after retries.", strict_refine, "Keeping fallback captions for this batch."):
                 continue
@@ -304,14 +370,8 @@ def _refine_story_batches(
                 num_ctx=num_ctx,
                 response_format="json",
             )
-            parsed_obj = extract_json_object(raw)
-            parsed_captions: Optional[List[Any]] = None
-            new_summary = ""
-            if parsed_obj is not None:
-                parsed_captions = caption_rows_from_payload(parsed_obj)
-                new_summary = clamp_words(str(parsed_obj.get("story_summary", "")), story_summary_max_words)
-            else:
-                parsed_captions = caption_rows_from_payload(extract_json_array(raw))
+            parsed_captions, new_summary = parse_caption_rows(raw)
+            new_summary = clamp_words(new_summary, story_summary_max_words)
 
             if parsed_captions is None:
                 if attempt < llm_retries:
@@ -323,6 +383,24 @@ def _refine_story_batches(
                 break
             if attempt < llm_retries:
                 print(f"Story-aware LLM omitted {len(missing_indices)} caption(s) in one batch; retrying.", file=sys.stderr)
+
+        if missing_indices:
+            print("Trying simplified story-aware refinement repair for one batch.", file=sys.stderr)
+            repaired, repaired_summary = repair_refine_batch(
+                chunk,
+                input_rows,
+                host,
+                text_model,
+                keep_alive,
+                seed,
+                num_ctx,
+                story_summary_max_words,
+            )
+            if repaired:
+                by_index = repaired
+                missing_indices = missing_caption_indices(chunk, by_index)
+                if repaired_summary:
+                    new_summary = clamp_words(repaired_summary, story_summary_max_words)
 
         if not by_index:
             if not _handle_refine_failure("Could not parse story-aware LLM JSON after retries.", strict_refine, "Keeping fallback captions for this batch."):

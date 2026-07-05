@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from aicap import refine as refine_module  # noqa: E402
 from aicap.cache import load_visual_cache  # noqa: E402
-from aicap.captions import captions_by_chunk_from_rows  # noqa: E402
+from aicap.captions import caption_rows_from_text, captions_by_chunk_from_rows  # noqa: E402
 from aicap.constants import DEFAULT_PROMPTS  # noqa: E402
 from aicap.models import CaptionItem  # noqa: E402
 
@@ -133,6 +133,45 @@ class PipelineReliabilityTests(unittest.TestCase):
 
         self.assertEqual([item.final_caption for item in refined], ["caption nine", "caption ten"])
 
+    def test_story_refine_repairs_after_malformed_json_retries(self) -> None:
+        items = [make_item(1), make_item(2)]
+        calls = []
+        old_check_ollama = refine_module.check_ollama
+        old_generate = refine_module.ollama_generate
+        try:
+            refine_module.check_ollama = lambda host: None
+
+            def fake_generate(*args, **kwargs):
+                calls.append(kwargs)
+                if len(calls) <= 2:
+                    return "not json"
+                return '{"captions":[{"i":1,"caption":"repaired one"},{"i":2,"caption":"repaired two"}],"story_summary":"repaired"}'
+
+            refine_module.ollama_generate = fake_generate
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                refined = refine_module.refine_with_llm(
+                    items,
+                    host="http://example.invalid",
+                    text_model="dummy",
+                    caption_mode="neutral",
+                    batch_size=2,
+                    prompts=DEFAULT_PROMPTS,
+                    keep_alive="0",
+                    temperature=0.0,
+                    seed=42,
+                    num_ctx=8192,
+                    llm_retries=1,
+                    strict_refine=True,
+                    cache_path=None,
+                    story_context=True,
+                )
+        finally:
+            refine_module.check_ollama = old_check_ollama
+            refine_module.ollama_generate = old_generate
+
+        self.assertEqual([item.final_caption for item in refined], ["repaired one", "repaired two"])
+        self.assertEqual(len(calls), 3)
+
     def test_caption_rows_fall_back_to_chunk_order(self) -> None:
         chunk = [make_item(9), make_item(10)]
 
@@ -142,6 +181,10 @@ class PipelineReliabilityTests(unittest.TestCase):
         )
 
         self.assertEqual(by_index, {9: "caption nine", 10: "caption ten"})
+
+    def test_caption_rows_from_text_requires_caption_like_lines(self) -> None:
+        self.assertEqual(caption_rows_from_text("not json"), [])
+        self.assertEqual(caption_rows_from_text("1. first caption\n2. second caption"), ["first caption", "second caption"])
 
     def test_visual_cache_skips_bad_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

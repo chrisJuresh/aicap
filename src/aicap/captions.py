@@ -148,6 +148,16 @@ def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
 
 CAPTION_KEYS = ("caption", "text", "final_caption", "subtitle", "line")
 INDEX_KEYS = ("i", "index", "id", "caption_index")
+IGNORED_CAPTION_LINE_PREFIXES = (
+    "caption",
+    "captions",
+    "current input",
+    "here",
+    "input",
+    "json",
+    "story_summary",
+    "story summary",
+)
 
 
 def caption_rows_from_payload(payload: Any) -> Optional[List[Any]]:
@@ -167,6 +177,48 @@ def caption_rows_from_payload(payload: Any) -> Optional[List[Any]]:
         return [payload]
 
     return None
+
+
+def caption_rows_from_text(text: str) -> List[str]:
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE)
+
+    quoted = re.findall(r'"(?:caption|text|final_caption|subtitle|line)"\s*:\s*"([^"]+)"', text, flags=re.IGNORECASE)
+    rows = [clean_text(row) for row in quoted if clean_text(row)]
+    if rows:
+        return rows
+
+    rows = []
+    plain_rows = []
+    for raw_line in text.splitlines():
+        is_bulleted = re.match(r"^\s*[-*]\s+", raw_line) is not None
+        line = clean_text(raw_line.strip(" \t\r\n-*"))
+        if not line:
+            continue
+        if line in {"{", "}", "[", "]", "},", "],"}:
+            continue
+        lowered = line.lower().strip(" :-")
+        if any(lowered == prefix or lowered.startswith(prefix + ":") for prefix in IGNORED_CAPTION_LINE_PREFIXES):
+            continue
+
+        match = re.match(
+            r"^(?:caption\s*)?(?:i\s*[:=]\s*)?(?:#\s*)?\d+\s*[\).:\-]\s*(.+)$",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            line = clean_text(match.group(1))
+            if len(line.split()) >= 2:
+                rows.append(line.rstrip(","))
+            continue
+
+        if is_bulleted and len(line.split()) >= 2:
+            rows.append(line.rstrip(","))
+            continue
+
+        if len(line.split()) >= 2:
+            plain_rows.append(line.rstrip(","))
+    return rows or (plain_rows if len(plain_rows) >= 2 else [])
 
 
 def caption_text_from_row(row: Any) -> str:
